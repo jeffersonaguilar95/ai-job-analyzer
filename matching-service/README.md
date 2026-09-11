@@ -1,15 +1,46 @@
-# matching-service (Go) — next phase, not implemented yet
+# matching-service (Go)
 
-Local service that will receive `{ title, company, text }` from the extension
-(`POST http://localhost:8787/analyze`) and return `{ score, reasoning }`.
+Local HTTP service that scores a job posting against your CV. Called by the
+extension's `background.ts` at `POST http://localhost:8787/analyze`.
 
-Plan:
-- Parse the CV from a PDF (once, when the service starts).
-- Compare the CV against each posting using the Claude API with structured
-  JSON output (score 0-100 + short reasoning).
-- No persistence beyond the process — doesn't store or log posting content
-  or the CV to disk unless explicitly asked to.
+Uses the official [`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go)
+to send your CV (as a native PDF document block) plus the job posting text to
+Claude, constrained to a structured `{score, reasoning}` JSON output via
+`output_config.format` — no manual JSON parsing or prompt-based formatting
+tricks. No persistence: the CV is read once into memory at startup and never
+written to disk; job postings and responses aren't logged or stored anywhere.
 
-Until this service exists, `extension/src/background.ts` still calls it,
-fails silently (try/catch), and stores `score: null` with a note — so the
-click/scroll prototype can be calibrated live without depending on Go yet.
+## Setup
+
+```bash
+cd matching-service
+export ANTHROPIC_API_KEY=sk-ant-...   # required
+export CV_PATH=/absolute/path/to/your-cv.pdf   # required
+# export PORT=8787                    # optional, defaults to 8787
+# export ANTHROPIC_MODEL=claude-opus-5 # optional, defaults to claude-opus-5
+
+go build -o bin/matching-service .
+./bin/matching-service
+```
+
+The extension expects this service on port `8787` — if you change `PORT`, also
+update `GO_SERVICE_URL` in `extension/src/background.ts` and the matching
+`host_permissions` entry in `extension/public/manifest.json`.
+
+## API
+
+```
+POST /analyze
+{"title": "...", "company": "...", "text": "..."}
+
+-> {"score": 0-100, "reasoning": "..."}
+```
+
+On a safety-classifier refusal (`stop_reason: "refusal"`), responds with
+`score: null` and a `reasoning` string explaining the request was declined —
+it does not error out the whole request.
+
+If `matching-service` isn't running, `extension/src/background.ts` still
+works: the `fetch` fails, is caught, and each result is stored with
+`score: null` — useful for calibrating the click/scroll prototype without
+this service up yet.
