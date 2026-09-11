@@ -1,97 +1,99 @@
 # AI Job Analyzer
 
-Extensión de Chrome que recorre los resultados de una búsqueda de empleo que
-**vos ya hiciste manualmente** (login y búsqueda incluidos), y puntúa cada
-oferta de 0 a 100 contra tu CV, usando un servicio local en Go que llama a la
-API de Claude para el razonamiento del match.
+Chrome extension that walks the results of a job search you already ran
+manually (login and search included), and scores each posting from 0 to 100
+against your CV, using a local Go service that calls the Claude API for the
+match reasoning.
 
-**No aplica automáticamente a nada.** Solo lee, extrae texto y muestra un
-ranking. El click "Start" lo das vos desde el popup; nunca arranca solo.
+**It never applies to anything automatically.** It only reads, extracts text,
+and shows a ranking. You click "Start" from the popup; it never starts on
+its own.
 
-## ⚠️ Aviso legal
+## ⚠️ Legal notice
 
-Esta extensión automatiza clicks y scrolls reales (vía `chrome.debugger` / CDP)
-sobre páginas de LinkedIn ya autenticadas con tu sesión. **Automatizar
-interacciones en LinkedIn puede violar sus Términos de Servicio** y exponerte a
-una restricción o baneo de cuenta. Este proyecto es de uso personal/educativo;
-usalo bajo tu propio criterio y riesgo. No está afiliado a LinkedIn ni a
-ningún otro portal.
+This extension automates real clicks and scrolls (via `chrome.debugger` / CDP)
+on LinkedIn pages already authenticated with your session. **Automating
+interactions on LinkedIn may violate its Terms of Service** and expose you to
+account restriction or a ban. This project is for personal/educational use;
+use it at your own discretion and risk. It is not affiliated with LinkedIn or
+any other job board.
 
-## Cómo funciona (arquitectura)
+## How it works (architecture)
 
 ```
 ┌─────────────────────────┐        fetch localhost         ┌──────────────────────┐
-│  Extensión (TS, MV3)     │ ─────────────────────────────▶ │ matching-service (Go) │
-│                          │                                 │  (próxima fase)       │
-│  popup:  Start / Stop /  │                                 │  - parsea tu CV (PDF) │
-│          export CSV/JSON │                                 │  - llama a Claude API │
-│                          │ ◀───────────────────────────── │  - devuelve score 0-100│
-│  background: loop de     │        { score, reasoning }     └──────────────────────┘
-│  scoring, controlado por │
+│  Extension (TS, MV3)     │ ─────────────────────────────▶ │ matching-service (Go) │
+│                          │                                 │  (next phase)         │
+│  popup:  Start / Stop /  │                                 │  - parses your CV(PDF)│
+│          export CSV/JSON │                                 │  - calls Claude API   │
+│                          │ ◀───────────────────────────── │  - returns score 0-100 │
+│  background: scoring     │        { score, reasoning }     └──────────────────────┘
+│  loop, controlled via    │
 │  chrome.storage.local    │
 │         │                │
 │         ▼ chrome.debugger (CDP)
-│  clicks/scrolls REALES  │
-│  sobre la pestaña activa │
+│  REAL clicks/scrolls    │
+│  on the active tab       │
 └─────────────────────────┘
 ```
 
-- **Sin eventos sintéticos**: los clicks y scrolls se disparan con
-  `Input.dispatchMouseEvent` sobre el protocolo CDP (`chrome.debugger`), no con
-  `element.click()` ni `window.scrollTo()`. Esto es intencional: permite
-  verlo actuar "como si fuera vos" con el mouse, para poder monitorearlo en
-  vivo mientras calibrás selectores/timings.
-- **Arquitectura de adapters**: cada portal (LinkedIn, y a futuro otros) es un
-  objeto `SiteAdapter` (`extension/src/adapters/`) con los selectores y
-  expresiones JS propias del sitio. El loop en `background.ts` no conoce
-  detalles de ningún portal — solo llama a la interfaz del adapter.
-- **Resumable**: el progreso (`currentIndex`, resultados ya obtenidos) vive en
-  `chrome.storage.local`. Un "Detener" no reprocesa lo ya hecho.
-- **Comunicación con el servicio Go**: `fetch` a `http://localhost:8787`. Si el
-  servicio no está corriendo, la extensión sigue funcionando igual (guarda
-  `score: null`) — útil para probar el prototipo de click/scroll sin depender
-  de Go todavía.
+- **No synthetic events**: clicks and scrolls are fired with
+  `Input.dispatchMouseEvent` over the CDP protocol (`chrome.debugger`), not
+  with `element.click()` or `window.scrollTo()`. This is intentional: it lets
+  you watch it act "as if it were you" with the mouse, so you can monitor it
+  live while calibrating selectors/timings.
+- **Adapter architecture**: each job board (LinkedIn, and others in the
+  future) is a `SiteAdapter` object (`extension/src/adapters/`) with its own
+  selectors and JS expressions. The loop in `background.ts` doesn't know
+  anything about any specific site — it only calls the adapter interface.
+- **Resumable**: progress (`currentIndex`, results already obtained) lives in
+  `chrome.storage.local`. A "Stop" doesn't reprocess what's already done.
+- **Communication with the Go service**: `fetch` to `http://localhost:8787`.
+  If the service isn't running, the extension keeps working anyway (stores
+  `score: null`) — useful for testing the click/scroll prototype without
+  depending on Go yet.
 
-## Estructura del repo
+## Repo structure
 
-- `extension/` — extensión Chrome MV3 en TypeScript (esqueleto ya funcional).
-- `matching-service/` — servicio de scoring en Go (CV + Claude API). **Todavía
-  no implementado**, ver `matching-service/README.md`.
+- `extension/` — Chrome MV3 extension in TypeScript (functional skeleton).
+- `matching-service/` — Go scoring service (CV + Claude API). **Not
+  implemented yet**, see `matching-service/README.md`.
 
-## Extensión: cómo correrla en local
+## Extension: running it locally
 
 ```bash
 cd extension
 yarn install
-yarn build      # o `yarn watch` para rebuild automático
+yarn build      # or `yarn watch` for automatic rebuild
 ```
 
-Luego en Chrome: `chrome://extensions` → activar "Modo de desarrollador" →
-"Cargar descomprimida" → seleccionar `extension/dist`.
+Then in Chrome: `chrome://extensions` → enable "Developer mode" → "Load
+unpacked" → select `extension/dist`.
 
-Uso:
-1. Andá manualmente a `linkedin.com`, logueate y hacé tu búsqueda de empleo.
-2. Con esa pestaña activa, abrí el popup de la extensión y tocá **Start**.
-3. Vas a ver la extensión clickeando y scrolleando la lista de resultados como
-   si fuera un mouse real (Chrome muestra un banner de "esta extensión está
-   depurando este navegador" — es esperado, es justamente lo que te permite
-   monitorearla).
-4. **Detener** en cualquier momento pausa sin perder lo ya procesado; **Start**
-   de nuevo retoma desde donde quedó.
-5. Exportá CSV/JSON con los resultados ordenados de mayor a menor score.
+Usage:
+1. Manually go to `linkedin.com`, log in, and run your job search.
+2. With that tab active, open the extension popup and click **Start**.
+3. You'll see the extension clicking and scrolling through the results list
+   as if it were a real mouse (Chrome shows a banner saying "this extension
+   is debugging this browser" — that's expected, and it's exactly what lets
+   you monitor it).
+4. **Stop** at any time pauses without losing what's already been processed;
+   **Start** again resumes from where it left off.
+5. Export CSV/JSON with the results sorted from highest to lowest score.
 
-### Agregar un portal nuevo
+### Adding a new job board
 
-Escribí un `SiteAdapter` nuevo en `extension/src/adapters/` (selectores +
-timings propios del sitio) y sumalo en `extension/src/adapters/registry.ts`.
-El loop de `background.ts` no requiere cambios.
+Write a new `SiteAdapter` in `extension/src/adapters/` (selectors and timings
+specific to that site) and register it in
+`extension/src/adapters/registry.ts`. The loop in `background.ts` doesn't
+need any changes.
 
-## Estado / roadmap
+## Status / roadmap
 
-- [x] Esqueleto de la extensión (manifest MV3 + permiso `debugger`).
-- [x] Prototipo de click/scroll real vía CDP + adapter de LinkedIn (selectores
-      a calibrar en vivo).
-- [x] Loop resumable, popup con Start/Stop, export CSV/JSON.
-- [ ] `matching-service` en Go: parseo de CV en PDF + llamada a Claude API.
-- [ ] Calibración en vivo de selectores/timings contra LinkedIn real.
-- [ ] Adapters para otros portales (2–4h adicionales cada uno).
+- [x] Extension skeleton (MV3 manifest + `debugger` permission).
+- [x] Real click/scroll prototype via CDP + LinkedIn adapter (selectors to
+      calibrate live).
+- [x] Resumable loop, popup with Start/Stop, CSV/JSON export.
+- [ ] `matching-service` in Go: CV PDF parsing + Claude API call.
+- [ ] Live calibration of selectors/timings against real LinkedIn pages.
+- [ ] Adapters for other job boards (2-4h extra each).
