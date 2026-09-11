@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>AI Job Analyzer</title>
@@ -21,24 +21,24 @@
 </head>
 <body>
   <h1>AI Job Analyzer</h1>
-  <div id="status">Estado: idle</div>
+  <div id="status">Status: idle</div>
   <div id="error"></div>
   <div class="row">
     <button id="start">Start</button>
-    <button id="stop">■ Detener</button>
+    <button id="stop">■ Stop</button>
   </div>
   <div class="row">
-    <button id="exportCsv">Exportar CSV</button>
-    <button id="exportJson">Exportar JSON</button>
+    <button id="exportCsv">Export CSV</button>
+    <button id="exportJson">Export JSON</button>
   </div>
   <table id="results">
-    <thead><tr><th style="width:15%">Score</th><th style="width:55%">Título</th><th style="width:30%">Empresa</th></tr></thead>
+    <thead><tr><th style="width:15%">Score</th><th style="width:55%">Title</th><th style="width:30%">Company</th></tr></thead>
     <tbody></tbody>
   </table>
   <div id="disclaimer">
-    No aplica automáticamente a ninguna oferta, solo muestra matches. Automatizar
-    interacciones en LinkedIn puede violar sus Términos de Servicio — usalo bajo tu
-    propio criterio y riesgo.
+    Never applies to any posting automatically — it only shows matches.
+    Automating interactions on LinkedIn may violate its Terms of Service —
+    use it at your own discretion and risk.
   </div>
   <script type="module" src="popup.js"></script>
 </body>
