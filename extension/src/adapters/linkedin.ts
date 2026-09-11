@@ -1,10 +1,10 @@
 import type { SiteAdapter } from './types';
 
 /**
- * SELECTORES PLACEHOLDER — este es justamente el prototipo para calibrarlos
- * en vivo. LinkedIn cambia clases/estructura seguido; si algo no matchea,
- * abrí DevTools sobre linkedin.com/jobs/search con resultados ya cargados
- * y ajustá estas constantes (no hace falta tocar el resto del código).
+ * PLACEHOLDER SELECTORS — this is exactly the prototype meant to calibrate
+ * them live. LinkedIn changes classes/structure often; if something doesn't
+ * match, open DevTools on linkedin.com/jobs/search with results already
+ * loaded and adjust these constants (no need to touch the rest of the code).
  */
 const CARD_SELECTOR = 'li.jobs-search-results__list-item, div.job-card-container';
 const LIST_SELECTOR = 'div.jobs-search-results-list, ul.scaffold-layout__list-container';
@@ -41,8 +41,8 @@ export const linkedinAdapter: SiteAdapter = {
 
   scrollContainerRectExpr: rectExprFor(`document.querySelector('${LIST_SELECTOR}')`),
 
-  // El panel de detalle es único en la página (no por tarjeta), así que no
-  // necesita el índice — se mantiene en la firma para cumplir el contrato del adapter.
+  // The detail panel is unique on the page (not per card), so it doesn't
+  // need the index — kept in the signature to satisfy the adapter contract.
   extractExpr: (_index) => `(() => {
     const titleEl = document.querySelector('${TITLE_SELECTOR}');
     const companyEl = document.querySelector('${COMPANY_SELECTOR}');
