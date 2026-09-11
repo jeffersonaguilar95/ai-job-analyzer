@@ -44,7 +44,7 @@ export async function resetState(): Promise<RunState> {
   return fresh;
 }
 
-/** Persiste un resultado inmediatamente — así un Stop a mitad de corrida no pierde nada. */
+/** Persists a result immediately — so a Stop mid-run never loses anything. */
 export async function appendResult(result: JobResult): Promise<RunState> {
   const current = await getState();
   return setState({ results: [...current.results, result] });
