@@ -1,0 +1,20 @@
+# IDE
+.idea/
+
+# Extension build artifacts
+extension/node_modules/
+extension/dist/
+
+# Go service (futuro)
+matching-service/bin/
+matching-service/.env
+
+# Secretos y datos personales — nunca se commitean
+**/*.env
+claude_api_key*
+cv.pdf
+*.cv.pdf
+/cv/
+
+# Resultados exportados (contienen datos personales de matching)
+job-matches.*
