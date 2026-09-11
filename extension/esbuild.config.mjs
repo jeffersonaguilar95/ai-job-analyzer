@@ -20,10 +20,10 @@ async function run() {
   if (watch) {
     const ctx = await context(options);
     await ctx.watch();
-    console.log('Watching for changes... (recordá "npm run build" copia public/ solo una vez; volvé a correrlo si tocás manifest.json o popup.html)');
+    console.log('Watching for changes... (this only copies public/ once; re-run "yarn build" if you touch manifest.json or popup.html)');
   } else {
     await build(options);
-    console.log('Build listo -> dist/ (cargar como extensión sin empaquetar en chrome://extensions)');
+    console.log('Build ready -> dist/ (load as an unpacked extension in chrome://extensions)');
   }
 }
 
