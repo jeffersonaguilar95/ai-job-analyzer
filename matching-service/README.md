@@ -1,15 +1,15 @@
-# matching-service (Go) — próxima fase, todavía no implementado
+# matching-service (Go) — next phase, not implemented yet
 
-Servicio local que va a recibir `{ title, company, text }` de la extensión
-(`POST http://localhost:8787/analyze`) y devolver `{ score, reasoning }`.
+Local service that will receive `{ title, company, text }` from the extension
+(`POST http://localhost:8787/analyze`) and return `{ score, reasoning }`.
 
 Plan:
-- Parseo del CV en PDF (una vez, al arrancar el servicio).
-- Comparación CV vs. oferta usando la API de Claude con salida JSON estructurada
-  (score 0–100 + razonamiento breve).
-- Sin persistencia más allá del proceso — no guarda ni loguea el contenido de las
-  ofertas ni el CV en disco salvo que se le pida explícitamente.
+- Parse the CV from a PDF (once, when the service starts).
+- Compare the CV against each posting using the Claude API with structured
+  JSON output (score 0-100 + short reasoning).
+- No persistence beyond the process — doesn't store or log posting content
+  or the CV to disk unless explicitly asked to.
 
-Mientras este servicio no exista, `extension/src/background.ts` hace `fetch` igual,
-falla en silencio (try/catch) y guarda `score: null` con una nota — así el
-prototipo de click/scroll se puede calibrar en vivo sin depender de Go todavía.
+Until this service exists, `extension/src/background.ts` still calls it,
+fails silently (try/catch), and stores `score: null` with a note — so the
+click/scroll prototype can be calibrated live without depending on Go yet.
