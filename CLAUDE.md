@@ -10,13 +10,14 @@ scores each posting against the user's CV, and shows a ranked list. It never
 applies to anything automatically, and it never starts on its own — only from
 the popup's Start button. Full write-up and legal/ToS disclaimer: `README.md`.
 
-Two independent parts, at different stages:
-- `extension/` — TypeScript, Manifest V3. **Functional skeleton exists.**
-- `matching-service/` — Go service (CV parsing + Claude API for scoring).
-  **Not implemented yet** — currently just `matching-service/README.md`
-  describing the planned `POST /analyze` contract. `background.ts` already
-  calls this endpoint and degrades gracefully (`score: null`) when it's not
-  running, so the extension is testable standalone.
+Two independent parts:
+- `extension/` — TypeScript, Manifest V3. Functional skeleton.
+- `matching-service/` — Go service serving `POST /analyze`: sends the CV (as
+  a native PDF document block, read once at startup) plus the job posting
+  text to Claude via the official `anthropic-sdk-go`, constrained to
+  structured `{score, reasoning}` JSON via `output_config.format`.
+  `background.ts` degrades gracefully (`score: null`) when this service
+  isn't running, so the extension is testable standalone.
 
 ## Language convention
 
@@ -58,6 +59,14 @@ yarn typecheck  # tsc --noEmit
 Load `extension/dist` as an unpacked extension via `chrome://extensions` →
 Developer mode → "Load unpacked". There is no test suite yet.
 
+From `matching-service/` (requires Go 1.24+ and `ANTHROPIC_API_KEY` /
+`CV_PATH` env vars — see `matching-service/README.md`):
+
+```bash
+go build -o bin/matching-service .
+./bin/matching-service
+```
+
 ## Architecture
 
 **Everything that acts on the page goes through `chrome.debugger` (CDP), not
@@ -94,10 +103,13 @@ only communicate via `chrome.runtime.sendMessage` (see
 
 **Go service boundary**: `background.ts`'s `analyzeWithGoService` POSTs
 `{title, company, text}` to `http://localhost:8787/analyze` and expects
-`{score, reasoning}` back. This URL/port is the only coupling point between
-the two halves of the project — when building `matching-service/`, match this
-contract (or update the constant + `host_permissions` in
-`extension/public/manifest.json` together if the port changes).
+`{score, reasoning}` back (implemented in `matching-service/score.go`). This
+URL/port is the only coupling point between the two halves of the project —
+if the port changes, update the constant in `background.ts` and the matching
+`host_permissions` entry in `extension/public/manifest.json` together.
+`matching-service` reads the CV once at startup (no per-request disk I/O,
+nothing written to disk) and uses Claude's native PDF document input rather
+than a separate Go PDF-parsing library.
 
 ## Known placeholder / to calibrate
 

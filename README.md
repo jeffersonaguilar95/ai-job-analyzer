@@ -56,8 +56,8 @@ any other job board.
 ## Repo structure
 
 - `extension/` — Chrome MV3 extension in TypeScript (functional skeleton).
-- `matching-service/` — Go scoring service (CV + Claude API). **Not
-  implemented yet**, see `matching-service/README.md`.
+- `matching-service/` — Go scoring service (CV + Claude API), see
+  `matching-service/README.md`.
 
 ## Extension: running it locally
 
@@ -88,12 +88,25 @@ specific to that site) and register it in
 `extension/src/adapters/registry.ts`. The loop in `background.ts` doesn't
 need any changes.
 
+## matching-service: running it locally
+
+```bash
+cd matching-service
+export ANTHROPIC_API_KEY=sk-ant-...
+export CV_PATH=/absolute/path/to/your-cv.pdf
+go build -o bin/matching-service .
+./bin/matching-service
+```
+
+See `matching-service/README.md` for the full API contract and optional env vars.
+
 ## Status / roadmap
 
 - [x] Extension skeleton (MV3 manifest + `debugger` permission).
 - [x] Real click/scroll prototype via CDP + LinkedIn adapter (selectors to
       calibrate live).
 - [x] Resumable loop, popup with Start/Stop, CSV/JSON export.
-- [ ] `matching-service` in Go: CV PDF parsing + Claude API call.
+- [x] `matching-service` in Go: CV PDF (native document input) + Claude API
+      call with structured JSON output.
 - [ ] Live calibration of selectors/timings against real LinkedIn pages.
 - [ ] Adapters for other job boards (2-4h extra each).
