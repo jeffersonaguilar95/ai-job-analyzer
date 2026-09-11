@@ -10,9 +10,10 @@ extension/dist/
 /node_modules/
 /yarn.lock
 
-# Go service (future)
+# Go service
 matching-service/bin/
 matching-service/.env
+matching-service/matching-service
 
 # Secrets and personal data — never commit these
 **/*.env
