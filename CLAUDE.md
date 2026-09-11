@@ -18,6 +18,32 @@ Two independent parts, at different stages:
   calls this endpoint and degrades gracefully (`score: null`) when it's not
   running, so the extension is testable standalone.
 
+## Language convention
+
+All generated content — code, comments, commit messages, docs — must be in
+English, even though the user communicates with Claude in Spanish. Do not
+introduce Spanish into any file in this repository.
+
+## Autonomous workflow
+
+- Work continuously without asking for confirmation on routine steps
+  (creating files, installing dependencies, running builds/tests).
+- Make small, frequent commits — one per logical unit of change (a new
+  selector, a function, a fix). Commit messages: descriptive, in English,
+  `type(module): description` (see git log for the pattern already in use).
+- NEVER run `git push` or configure remotes — that stays under the user's
+  manual control.
+- Stop and ask only when:
+  - There's a real architecture/library trade-off to pick between (e.g.
+    fetch vs. Native Messaging for extension <-> Go communication).
+  - A LinkedIn selector can't be inferred without seeing the live DOM.
+  - A decision affects project scope (adding a new job board, changing the
+    score format).
+  - An error can't be resolved after 2-3 attempts.
+- Update this CLAUDE.md, `.gitignore`, and `README.md` whenever the project
+  needs it (new folder, new dependency, new build command) — don't wait for
+  explicit instruction.
+
 ## Commands
 
 All commands run from `extension/`. Use **yarn**, not npm, for this project.
