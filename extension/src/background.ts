@@ -4,12 +4,12 @@ import { findAdapter } from './adapters/registry';
 import type { SiteAdapter, JobResult } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
 
-/** URL del servicio local en Go (todavía no implementado — ver matching-service/). */
+/** URL of the local Go service (not implemented yet — see matching-service/). */
 const GO_SERVICE_URL = 'http://localhost:8787/analyze';
 
 async function getActiveTab(): Promise<chrome.tabs.Tab> {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!tab || !tab.id || !tab.url) throw new Error('No hay una pestaña activa válida.');
+  if (!tab || !tab.id || !tab.url) throw new Error('No valid active tab found.');
   return tab;
 }
 
@@ -22,23 +22,23 @@ async function analyzeWithGoService(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(job),
     });
-    if (!res.ok) throw new Error(`Servicio Go respondió ${res.status}`);
+    if (!res.ok) throw new Error(`Go service responded ${res.status}`);
     const data = (await res.json()) as { score?: number; reasoning?: string };
     return { score: data.score ?? null, reasoning: data.reasoning ?? null };
   } catch (err) {
-    console.warn('[ai-job-analyzer] Servicio Go no disponible todavía:', err);
-    return { score: null, reasoning: 'Servicio de matching (Go) no disponible.' };
+    console.warn('[ai-job-analyzer] Go service not available yet:', err);
+    return { score: null, reasoning: 'Matching service (Go) not available.' };
   }
 }
 
-/** Hace scroll real (mouseWheel) hasta que la tarjeta N entre en el viewport. */
+/** Real scroll (mouseWheel) until card N enters the viewport. */
 async function scrollCardIntoView(tabId: number, adapter: SiteAdapter, index: number): Promise<void> {
   const containerRect = await evaluate<Point | null>(tabId, adapter.scrollContainerRectExpr);
   const scrollPoint: Point = containerRect ?? { x: 400, y: 400 };
 
   for (let attempt = 0; attempt < adapter.timings.maxScrollAttempts; attempt++) {
     const rect = await evaluate<{ top: number; bottom: number } | null>(tabId, adapter.cardRectExpr(index));
-    if (!rect) return; // la tarjeta no existe todavía (o ya no existe): fin de la lista
+    if (!rect) return; // the card doesn't exist (yet, or anymore): end of the list
 
     const viewport = await evaluate<{ h: number }>(tabId, '({ h: window.innerHeight })');
     const visible = rect.top >= 0 && rect.bottom <= viewport.h;
@@ -81,7 +81,7 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
 async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
   while (true) {
     const state = await getState();
-    if (state.status !== 'running') break; // Stop pedido: no se pierde lo ya procesado
+    if (state.status !== 'running') break; // Stop requested: nothing already processed is lost
 
     const count = await evaluate<number>(tabId, adapter.countCardsExpr);
     if (state.currentIndex >= count) {
@@ -93,7 +93,7 @@ async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
       const result = await processCard(tabId, adapter, state.currentIndex);
       if (result) await appendResult(result);
     } catch (err) {
-      console.error('[ai-job-analyzer] Error procesando tarjeta', state.currentIndex, err);
+      console.error('[ai-job-analyzer] Error processing card', state.currentIndex, err);
     }
 
     await setState({ currentIndex: state.currentIndex + 1 });
@@ -105,11 +105,11 @@ async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
 
 async function start(): Promise<ExtensionResponse> {
   const current = await getState();
-  if (current.status === 'running') return { ok: false, error: 'Ya está corriendo.' };
+  if (current.status === 'running') return { ok: false, error: 'Already running.' };
 
   const tab = await getActiveTab();
   const adapter = findAdapter(tab.url!);
-  if (!adapter) return { ok: false, error: `No hay adapter para esta URL: ${tab.url}` };
+  if (!adapter) return { ok: false, error: `No adapter for this URL: ${tab.url}` };
 
   const resuming = current.status === 'paused' && current.tabId === tab.id && current.adapterId === adapter.id;
   if (!resuming) await resetState();
@@ -118,7 +118,7 @@ async function start(): Promise<ExtensionResponse> {
   await setState({ status: 'running', tabId: tab.id!, adapterId: adapter.id });
 
   runLoop(tab.id!, adapter).catch(async (err) => {
-    console.error('[ai-job-analyzer] runLoop falló:', err);
+    console.error('[ai-job-analyzer] runLoop failed:', err);
     await setState({ status: 'error', error: String(err) });
     await detach(tab.id!).catch(() => {});
   });
@@ -127,8 +127,8 @@ async function start(): Promise<ExtensionResponse> {
 }
 
 async function stop(): Promise<ExtensionResponse> {
-  // El loop chequea el status al principio de cada vuelta: como mucho termina
-  // la tarjeta que ya estaba procesando y se detiene ahí, sin perder resultados.
+  // The loop checks status at the top of every iteration: at most it finishes
+  // the card it was already processing and stops there, without losing results.
   await setState({ status: 'paused' });
   return { ok: true };
 }
@@ -147,13 +147,13 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
         break;
     }
   })();
-  return true; // indica respuesta asíncrona
+  return true; // signals an asynchronous response
 });
 
-// Si el usuario cierra manualmente el banner "esta extensión está depurando
-// este navegador", tratamos eso como un Stop, no como un crash silencioso.
+// If the user manually closes the "this extension is debugging this browser"
+// banner, treat that as a Stop, not a silent crash.
 chrome.debugger.onDetach.addListener(async (_source, reason) => {
-  console.warn('[ai-job-analyzer] Debugger desconectado:', reason);
+  console.warn('[ai-job-analyzer] Debugger detached:', reason);
   const state = await getState();
   if (state.status === 'running') await setState({ status: 'paused' });
 });
