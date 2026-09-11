@@ -5,16 +5,16 @@
 extension/node_modules/
 extension/dist/
 
-# Go service (futuro)
+# Go service (future)
 matching-service/bin/
 matching-service/.env
 
-# Secretos y datos personales — nunca se commitean
+# Secrets and personal data — never commit these
 **/*.env
 claude_api_key*
 cv.pdf
 *.cv.pdf
 /cv/
 
-# Resultados exportados (contienen datos personales de matching)
+# Exported results (contain personal matching data)
 job-matches.*
