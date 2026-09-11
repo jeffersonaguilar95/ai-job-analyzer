@@ -5,6 +5,11 @@
 extension/node_modules/
 extension/dist/
 
+# Stray root-level installs — there's no package.json at the repo root,
+# so these only show up if `yarn`/`npm install` is run from the wrong dir
+/node_modules/
+/yarn.lock
+
 # Go service (future)
 matching-service/bin/
 matching-service/.env
