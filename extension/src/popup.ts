@@ -14,7 +14,7 @@ function escapeHtml(s: string): string {
 
 function renderState(state: RunState): void {
   const statusEl = document.getElementById('status')!;
-  statusEl.textContent = `Estado: ${state.status} — ${state.results.length} procesadas (índice ${state.currentIndex})`;
+  statusEl.textContent = `Status: ${state.status} — ${state.results.length} processed (index ${state.currentIndex})`;
 
   const errorEl = document.getElementById('error')!;
   errorEl.textContent = state.error ?? '';
