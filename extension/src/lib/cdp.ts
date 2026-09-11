@@ -1,10 +1,10 @@
 /**
- * Wrapper fino sobre chrome.debugger (Chrome DevTools Protocol).
+ * Thin wrapper around chrome.debugger (Chrome DevTools Protocol).
  *
- * Todo lo que "actúa" sobre la página (click, scroll) pasa por acá usando
- * Input.dispatchMouseEvent real — nunca element.click() ni window.scrollTo()
- * sintéticos — para que el movimiento sea indistinguible de un mouse real
- * y se pueda ver/monitorear en vivo.
+ * Everything that "acts" on the page (click, scroll) goes through here using
+ * real Input.dispatchMouseEvent calls — never synthetic element.click() or
+ * window.scrollTo() — so the movement is indistinguishable from an actual
+ * mouse and can be watched/monitored live.
  */
 
 const PROTOCOL_VERSION = '1.3';
@@ -42,7 +42,7 @@ export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Agrega variación aleatoria a un delay para que el timing no sea uniforme. */
+/** Adds random variance to a delay so the timing isn't perfectly uniform. */
 function jitter(ms: number, spreadRatio = 0.3): number {
   const spread = ms * spreadRatio;
   return Math.max(0, ms + (Math.random() * spread * 2 - spread));
@@ -60,7 +60,7 @@ export async function evaluate<T = unknown>(tabId: number, expression: string): 
     awaitPromise: true,
   });
   if (result.exceptionDetails) {
-    throw new Error(`Runtime.evaluate falló: ${JSON.stringify(result.exceptionDetails)}`);
+    throw new Error(`Runtime.evaluate failed: ${JSON.stringify(result.exceptionDetails)}`);
   }
   return result.result.value;
 }
@@ -92,8 +92,8 @@ export async function realClick(tabId: number, point: Point): Promise<void> {
 }
 
 /**
- * Scroll real con eventos de rueda (mouseWheel), partido en pasos chicos
- * para que se vea como un scroll manual y no un salto instantáneo.
+ * Real scroll using wheel events, split into small steps so it looks like a
+ * manual scroll instead of an instant jump.
  */
 export async function realScroll(
   tabId: number,
