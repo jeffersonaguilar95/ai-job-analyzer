@@ -59,11 +59,21 @@ async function scrollCardIntoView(tabId: number, adapter: SiteAdapter, index: nu
   }
 }
 
-async function processCard(tabId: number, adapter: SiteAdapter, index: number): Promise<Omit<JobResult, 'seq'> | null> {
+type ProcessOutcome =
+  | { kind: 'empty' } // the card doesn't exist (yet, or anymore): end of the list
+  | { kind: 'duplicate'; jobId: string; title: string; company: string }
+  | { kind: 'scored'; result: Omit<JobResult, 'seq'> };
+
+async function processCard(
+  tabId: number,
+  adapter: SiteAdapter,
+  index: number,
+  existingJobIds: ReadonlySet<string>,
+): Promise<ProcessOutcome> {
   await scrollCardIntoView(tabId, adapter, index);
 
   const rect = await evaluate<Point | null>(tabId, adapter.cardRectExpr(index));
-  if (!rect) return null;
+  if (!rect) return { kind: 'empty' };
 
   await realClick(tabId, rect);
   await sleep(adapter.timings.afterClickMs);
@@ -78,22 +88,34 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
     text: string;
   }>(tabId, adapter.extractExpr(index));
 
+  // Authoritative dedup check: by now the card has been scrolled to and
+  // clicked, so `extracted.jobId` (built from the same ID that's in the
+  // job's URL) is reliable — unlike a pre-click preview, which can miss
+  // cards LinkedIn hasn't fully rendered yet. Still costs the scroll+click,
+  // but skips the one part worth avoiding: the paid LLM call below.
+  if (extracted.jobId && existingJobIds.has(extracted.jobId)) {
+    return { kind: 'duplicate', jobId: extracted.jobId, title: extracted.title, company: extracted.company };
+  }
+
   const { score, strengths, gaps, reasoning } = await analyzeWithGoService(extracted);
 
   return {
-    index,
-    jobId: extracted.jobId,
-    title: extracted.title,
-    company: extracted.company,
-    location: extracted.location,
-    salary: extracted.salary,
-    url: extracted.url,
-    text: extracted.text,
-    score,
-    strengths,
-    gaps,
-    reasoning,
-    scoredAt: new Date().toISOString(),
+    kind: 'scored',
+    result: {
+      index,
+      jobId: extracted.jobId,
+      title: extracted.title,
+      company: extracted.company,
+      location: extracted.location,
+      salary: extracted.salary,
+      url: extracted.url,
+      text: extracted.text,
+      score,
+      strengths,
+      gaps,
+      reasoning,
+      scoredAt: new Date().toISOString(),
+    },
   };
 }
 
@@ -109,35 +131,39 @@ async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
       break;
     }
 
+    // Best-effort only, for the "currently processing" indicator — not
+    // authoritative for dedup, since LinkedIn may not have this card fully
+    // rendered yet at this point (see processCard for the real check).
     const preview = await evaluate<{ jobId: string; title: string; company: string } | null>(
       tabId,
       adapter.cardPreviewExpr(state.currentIndex),
     );
-    const alreadyScored = !!preview?.jobId && state.results.some((r) => r.jobId === preview.jobId);
+    await setState({
+      currentJob: preview
+        ? { index: state.currentIndex, jobId: preview.jobId, title: preview.title, company: preview.company }
+        : null,
+    });
 
-    if (alreadyScored && preview) {
-      console.log('[ai-job-analyzer] Skipping already-scored job', preview.jobId);
-      await appendDuplicate({
-        index: state.currentIndex,
-        jobId: preview.jobId,
-        title: preview.title,
-        company: preview.company,
-        skippedAt: new Date().toISOString(),
-      });
-    } else {
-      await setState({
-        currentJob: preview
-          ? { index: state.currentIndex, jobId: preview.jobId, title: preview.title, company: preview.company }
-          : null,
-      });
-      try {
-        const result = await processCard(tabId, adapter, state.currentIndex);
-        if (result) await appendResult(result);
-      } catch (err) {
-        console.error('[ai-job-analyzer] Error processing card', state.currentIndex, err);
-      } finally {
-        await setState({ currentJob: null });
+    const existingJobIds = new Set(state.results.map((r) => r.jobId));
+
+    try {
+      const outcome = await processCard(tabId, adapter, state.currentIndex, existingJobIds);
+      if (outcome.kind === 'scored') {
+        await appendResult(outcome.result);
+      } else if (outcome.kind === 'duplicate') {
+        console.log('[ai-job-analyzer] Skipping already-scored job', outcome.jobId);
+        await appendDuplicate({
+          index: state.currentIndex,
+          jobId: outcome.jobId,
+          title: outcome.title,
+          company: outcome.company,
+          skippedAt: new Date().toISOString(),
+        });
       }
+    } catch (err) {
+      console.error('[ai-job-analyzer] Error processing card', state.currentIndex, err);
+    } finally {
+      await setState({ currentJob: null });
     }
 
     await setState({ currentIndex: state.currentIndex + 1 });
