@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "AI Job Analyzer",
   "version": "0.1.0",
-  "description": "Recorre los resultados de una búsqueda de empleo ya hecha por vos y puntúa cada oferta contra tu CV (servicio local en Go + Claude). Nunca aplica automáticamente a nada.",
+  "description": "Walks the results of a job search you already ran and scores each posting against your CV (local Go + Claude service). Never applies to anything automatically.",
   "permissions": ["debugger", "storage", "downloads"],
   "host_permissions": [
     "https://www.linkedin.com/*",
