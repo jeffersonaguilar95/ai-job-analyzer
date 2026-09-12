@@ -1,5 +1,5 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
-import { getState, setState, resetState, appendResult } from './lib/storage';
+import { getState, setState, resetState, appendResult, appendDuplicate } from './lib/storage';
 import { findAdapter } from './adapters/registry';
 import type { SiteAdapter, JobResult } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
@@ -59,7 +59,7 @@ async function scrollCardIntoView(tabId: number, adapter: SiteAdapter, index: nu
   }
 }
 
-async function processCard(tabId: number, adapter: SiteAdapter, index: number): Promise<JobResult | null> {
+async function processCard(tabId: number, adapter: SiteAdapter, index: number): Promise<Omit<JobResult, 'seq'> | null> {
   await scrollCardIntoView(tabId, adapter, index);
 
   const rect = await evaluate<Point | null>(tabId, adapter.cardRectExpr(index));
@@ -109,17 +109,34 @@ async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
       break;
     }
 
-    const jobId = await evaluate<string | null>(tabId, adapter.cardIdExpr(state.currentIndex));
-    const alreadyScored = jobId !== null && state.results.some((r) => r.jobId === jobId);
+    const preview = await evaluate<{ jobId: string; title: string; company: string } | null>(
+      tabId,
+      adapter.cardPreviewExpr(state.currentIndex),
+    );
+    const alreadyScored = !!preview?.jobId && state.results.some((r) => r.jobId === preview.jobId);
 
-    if (alreadyScored) {
-      console.log('[ai-job-analyzer] Skipping already-scored job', jobId);
+    if (alreadyScored && preview) {
+      console.log('[ai-job-analyzer] Skipping already-scored job', preview.jobId);
+      await appendDuplicate({
+        index: state.currentIndex,
+        jobId: preview.jobId,
+        title: preview.title,
+        company: preview.company,
+        skippedAt: new Date().toISOString(),
+      });
     } else {
+      await setState({
+        currentJob: preview
+          ? { index: state.currentIndex, jobId: preview.jobId, title: preview.title, company: preview.company }
+          : null,
+      });
       try {
         const result = await processCard(tabId, adapter, state.currentIndex);
         if (result) await appendResult(result);
       } catch (err) {
         console.error('[ai-job-analyzer] Error processing card', state.currentIndex, err);
+      } finally {
+        await setState({ currentJob: null });
       }
     }
 

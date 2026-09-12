@@ -21,8 +21,8 @@ function renderState(state: RunState): void {
   const pageProgress =
     state.currentPageCount !== null ? `${Math.min(state.currentIndex, state.currentPageCount)}/${state.currentPageCount}` : '—';
   statusEl.textContent =
-    `Status: ${state.status} — page ${pageProgress} — ` +
-    `${state.pagesCompleted} page(s) completed — ${state.results.length} scored total`;
+    `Status: ${state.status} — page ${pageProgress} — ${state.pagesCompleted} page(s) completed — ` +
+    `${state.results.length} unique — ${state.duplicates.length} duplicates skipped`;
 
   const errorEl = document.getElementById('error')!;
   errorEl.textContent = state.error ?? '';
@@ -34,11 +34,32 @@ function renderState(state: RunState): void {
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
-  for (const r of byScoreDesc(state.results)) {
+
+  if (state.currentJob) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.score ?? '—'}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.company)}</td>`;
+    tr.className = 'processing';
+    tr.innerHTML = `<td>…</td><td>${escapeHtml(state.currentJob.title)}</td><td>${escapeHtml(state.currentJob.company)}</td>`;
     tbody.appendChild(tr);
   }
+
+  // Stack order (most recently processed first), interleaving scored results
+  // and skipped duplicates by their shared `seq` — the true processing
+  // order, unlike per-page `index`.
+  type Row = { seq: number; el: HTMLTableRowElement };
+  const rows: Row[] = [];
+  for (const r of state.results) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${r.score ?? '—'}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.company)}</td>`;
+    rows.push({ seq: r.seq, el: tr });
+  }
+  for (const d of state.duplicates) {
+    const tr = document.createElement('tr');
+    tr.className = 'duplicate';
+    tr.innerHTML = `<td>dup</td><td>${escapeHtml(d.title)}</td><td>${escapeHtml(d.company)}</td>`;
+    rows.push({ seq: d.seq, el: tr });
+  }
+  rows.sort((a, b) => b.seq - a.seq);
+  for (const row of rows) tbody.appendChild(row.el);
 }
 
 function download(filename: string, mime: string, content: string): void {

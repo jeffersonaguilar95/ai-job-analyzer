@@ -1,4 +1,6 @@
 export interface JobResult {
+  /** Monotonic counter assigned on append (shared with DuplicateEntry) — the true processing order, unlike `index`, which resets per page. */
+  seq: number;
   index: number;
   jobId: string;
   title: string;
@@ -37,8 +39,8 @@ export interface SiteAdapter {
   timings: AdapterTimings;
   /** Expression that returns the number of result cards visible in the DOM. */
   countCardsExpr: string;
-  /** Expression that returns a stable per-posting ID for card N, or null — read without scrolling/clicking, so already-scored cards can be skipped cheaply. */
-  cardIdExpr(index: number): string;
+  /** Expression that returns {jobId, title, company} for card N, or null — read without scrolling/clicking, so already-scored cards can be identified (and shown as "processing"/"duplicate") cheaply. */
+  cardPreviewExpr(index: number): string;
   /** Expression that returns {x,y,top,bottom} for card N's center/bounds, or null. */
   cardRectExpr(index: number): string;
   /** Reference point (inside the list container) used to fire the scroll. */

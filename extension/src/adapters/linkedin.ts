@@ -16,6 +16,24 @@ function jobIdExprFor(cardExpr: string): string {
   return `(${cardExpr}?.getAttribute('componentkey') || '').replace('job-card-component-ref-', '')`;
 }
 
+// Title/company/location live on the card itself (no dependency on the
+// detail panel's DOM). The title paragraph is the only one with a nested
+// `span[aria-hidden]` before the card's footer metadata, so it's found by
+// that; company/location are the next two plain paragraphs in DOM order.
+// Shared by extractExpr (after the click) and cardPreviewExpr (before it),
+// so both stay in sync if this needs recalibrating.
+function titleCompanyLocationExprFor(cardExpr: string): string {
+  return `(() => {
+    const card = ${cardExpr};
+    const paragraphs = [...card.querySelectorAll('p')];
+    const titleSpan = card.querySelector('p span[aria-hidden="true"]');
+    const title = titleSpan ? titleSpan.textContent.trim() : (paragraphs[0]?.innerText.trim() ?? '');
+    const company = paragraphs[1] ? paragraphs[1].innerText.trim() : '';
+    const location = paragraphs[2] ? paragraphs[2].innerText.trim() : '';
+    return { title, company, location };
+  })()`;
+}
+
 function rectExprFor(elementExpr: string): string {
   return `(() => {
     const el = ${elementExpr};
@@ -40,8 +58,15 @@ export const linkedinAdapter: SiteAdapter = {
   countCardsExpr: `document.querySelectorAll('${CARD_SELECTOR}').length`,
 
   // Read straight off the card, without scrolling/clicking, so already-seen
-  // postings can be skipped before paying for a scroll+click+LLM call.
-  cardIdExpr: (index) => `${jobIdExprFor(`document.querySelectorAll('${CARD_SELECTOR}')[${index}]`)} || null`,
+  // postings can be identified (and shown as "processing" or "duplicate")
+  // before paying for a scroll+click+LLM call.
+  cardPreviewExpr: (index) => `(() => {
+    const card = document.querySelectorAll('${CARD_SELECTOR}')[${index}];
+    if (!card) return null;
+    const jobId = ${jobIdExprFor('card')};
+    const { title, company } = ${titleCompanyLocationExprFor('card')};
+    return { jobId, title, company };
+  })()`,
 
   cardRectExpr: (index) => rectExprFor(`document.querySelectorAll('${CARD_SELECTOR}')[${index}]`),
 
@@ -85,11 +110,7 @@ export const linkedinAdapter: SiteAdapter = {
   extractExpr: (index) => `(() => {
     const card = document.querySelectorAll('${CARD_SELECTOR}')[${index}];
     if (!card) return { jobId: '', title: '', company: '', location: '', salary: '', url: location.href, text: '' };
-    const paragraphs = [...card.querySelectorAll('p')];
-    const titleSpan = card.querySelector('p span[aria-hidden="true"]');
-    const title = titleSpan ? titleSpan.textContent.trim() : (paragraphs[0]?.innerText.trim() ?? '');
-    const company = paragraphs[1] ? paragraphs[1].innerText.trim() : '';
-    const location = paragraphs[2] ? paragraphs[2].innerText.trim() : '';
+    const { title, company, location } = ${titleCompanyLocationExprFor('card')};
 
     const jobId = ${jobIdExprFor('card')};
     const url = jobId ? \`https://www.linkedin.com/jobs/view/\${jobId}/\` : location.href;

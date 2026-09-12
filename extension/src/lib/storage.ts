@@ -2,6 +2,25 @@ import type { JobResult } from '../adapters/types';
 
 export type RunStatus = 'idle' | 'running' | 'paused' | 'done' | 'error';
 
+/** A card recognized (by jobId) as already present in `results`, skipped without scoring it again. */
+export interface DuplicateEntry {
+  /** Monotonic counter shared with JobResult.seq — the true processing order. */
+  seq: number;
+  index: number;
+  jobId: string;
+  title: string;
+  company: string;
+  skippedAt: string;
+}
+
+/** The card currently mid-processing (scrolled/clicked, awaiting extraction+scoring), or null between cards. */
+export interface CurrentJob {
+  index: number;
+  jobId: string;
+  title: string;
+  company: string;
+}
+
 export interface RunState {
   status: RunStatus;
   tabId: number | null;
@@ -11,7 +30,11 @@ export interface RunState {
   currentPageCount: number | null;
   /** How many pages have finished processing (incremented on natural completion, not Stop). */
   pagesCompleted: number;
+  currentJob: CurrentJob | null;
+  /** Next value to assign to a JobResult/DuplicateEntry's `seq` — never reset except by Clear. */
+  nextSeq: number;
   results: JobResult[];
+  duplicates: DuplicateEntry[];
   error: string | null;
   updatedAt: string;
 }
@@ -26,7 +49,10 @@ function initialState(): RunState {
     currentIndex: 0,
     currentPageCount: null,
     pagesCompleted: 0,
+    currentJob: null,
+    nextSeq: 0,
     results: [],
+    duplicates: [],
     error: null,
     updatedAt: new Date().toISOString(),
   };
@@ -54,7 +80,14 @@ export async function resetState(): Promise<RunState> {
 }
 
 /** Persists a result immediately — so a Stop mid-run never loses anything. */
-export async function appendResult(result: JobResult): Promise<RunState> {
+export async function appendResult(result: Omit<JobResult, 'seq'>): Promise<RunState> {
   const current = await getState();
-  return setState({ results: [...current.results, result] });
+  const withSeq: JobResult = { ...result, seq: current.nextSeq };
+  return setState({ results: [...current.results, withSeq], nextSeq: current.nextSeq + 1 });
+}
+
+export async function appendDuplicate(entry: Omit<DuplicateEntry, 'seq'>): Promise<RunState> {
+  const current = await getState();
+  const withSeq: DuplicateEntry = { ...entry, seq: current.nextSeq };
+  return setState({ duplicates: [...current.duplicates, withSeq], nextSeq: current.nextSeq + 1 });
 }
