@@ -55,10 +55,15 @@ export const linkedinAdapter: SiteAdapter = {
   // footer metadata, so it's found by that; company/location are the next
   // two plain paragraphs in DOM order.
   //
-  // The canonical URL and full description come from the detail panel that
-  // opens after the click, scoped to the last `SemanticJobDetails` screen
-  // (there may be stale ones left in the DOM from earlier cards) so we don't
-  // cross into the sibling "About the company" section, which has its own
+  // The canonical URL is derived from the job ID embedded in the card's own
+  // `componentkey` (same one CARD_SELECTOR matches on) — cheaper and more
+  // reliable than opening the "Share" menu just to read its link, or reading
+  // location.href (which stays on the search-results URL, not the job's).
+  //
+  // The full description comes from the detail panel that opens after the
+  // click, scoped to the last `SemanticJobDetails` screen (there may be
+  // stale ones left in the DOM from earlier cards) so it doesn't cross into
+  // the sibling "About the company" section, which has its own
   // `expandable-text-box`.
   extractExpr: (index) => `(() => {
     const card = document.querySelectorAll('${CARD_SELECTOR}')[${index}];
@@ -69,12 +74,11 @@ export const linkedinAdapter: SiteAdapter = {
     const company = paragraphs[1] ? paragraphs[1].innerText.trim() : '';
     const location = paragraphs[2] ? paragraphs[2].innerText.trim() : '';
 
+    const jobId = (card.getAttribute('componentkey') || '').replace('job-card-component-ref-', '');
+    const url = jobId ? \`https://www.linkedin.com/jobs/view/\${jobId}/\` : location.href;
+
     const panels = document.querySelectorAll('[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]');
     const panel = panels[panels.length - 1] ?? null;
-
-    const titleLink = panel ? panel.querySelector('a[href*="/jobs/view/"]') : null;
-    const url = titleLink ? titleLink.href : location.href;
-
     const aboutJob = panel ? panel.querySelector('[id^="JobDetails_AboutTheJob_"]') : null;
     const descEl = aboutJob ? aboutJob.querySelector('span[data-testid="expandable-text-box"]') : null;
     const text = descEl ? descEl.innerText.trim() : '';
