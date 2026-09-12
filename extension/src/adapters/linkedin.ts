@@ -91,10 +91,9 @@ export const linkedinAdapter: SiteAdapter = {
   // footer metadata, so it's found by that; company/location are the next
   // two plain paragraphs in DOM order.
   //
-  // The canonical URL is derived from the job ID embedded in the card's own
-  // `componentkey` (same one CARD_SELECTOR matches on) — cheaper and more
-  // reliable than opening the "Share" menu just to read its link, or reading
-  // location.href (which stays on the search-results URL, not the job's).
+  // The canonical URL/ID come from the detail panel's own title link, not
+  // the card's `componentkey` — see the comment further down where it's
+  // read, next to the dedup-breaking case that ruled componentkey out.
   //
   // The full description comes from the detail panel that opens after the
   // click, scoped to the last `SemanticJobDetails` screen (there may be
@@ -115,11 +114,20 @@ export const linkedinAdapter: SiteAdapter = {
     if (!card) return { jobId: '', title: '', company: '', location: '', salary: '', url: location.href, text: '' };
     const { title, company, location } = ${titleCompanyLocationExprFor('card')};
 
-    const jobId = ${jobIdExprFor('card')};
-    const url = jobId ? \`https://www.linkedin.com/jobs/view/\${jobId}/\` : location.href;
-
     const panels = document.querySelectorAll('[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]');
     const panel = panels[panels.length - 1] ?? null;
+
+    // Authoritative ID: parsed from the detail panel's own title link
+    // (/jobs/view/<id>/), not the card's componentkey — that's a UI
+    // component-instance ref, not necessarily the same for two list entries
+    // that are actually the same posting (e.g. a promoted repost), which
+    // broke duplicate detection. Falls back to componentkey only if the
+    // panel/link isn't there for some reason.
+    const titleLink = panel ? panel.querySelector('a[href*="/jobs/view/"]') : null;
+    const urlMatch = titleLink ? titleLink.href.match(/\\/jobs\\/view\\/(\\d+)/) : null;
+    const jobId = urlMatch ? urlMatch[1] : ${jobIdExprFor('card')};
+    const url = jobId ? \`https://www.linkedin.com/jobs/view/\${jobId}/\` : (titleLink ? titleLink.href : location.href);
+
     const aboutJob = panel ? panel.querySelector('[id^="JobDetails_AboutTheJob_"]') : null;
     const descEl = aboutJob ? aboutJob.querySelector('span[data-testid="expandable-text-box"]') : null;
     const text = descEl ? descEl.innerText.trim() : '';
