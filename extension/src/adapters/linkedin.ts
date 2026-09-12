@@ -167,9 +167,13 @@ export const linkedinAdapter: SiteAdapter = {
     return { jobId, title, company, location, salary, url, text };
   })()`,
 
-  // PLACEHOLDER — not yet calibrated against a live results page. Always
-  // returns null (no next page found) until this has a real selector, so
-  // automatic pagination just stops cleanly (as if genuinely out of pages)
-  // rather than clicking the wrong thing.
-  nextPageRectExpr: 'null',
+  // The "Next" pagination control. Absent-or-disabled both mean "no next
+  // page" (LinkedIn may do either at the end of results) — returning null
+  // either way makes automatic pagination stop cleanly there.
+  nextPageRectExpr: rectExprFor(
+    `(() => {
+      const btn = document.querySelector('button[data-testid="pagination-controls-next-button-visible"]');
+      return btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true' ? btn : null;
+    })()`,
+  ),
 };

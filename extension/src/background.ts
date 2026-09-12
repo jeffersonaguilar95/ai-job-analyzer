@@ -41,22 +41,33 @@ async function analyzeWithGoService(
   }
 }
 
-/** Real scroll (mouseWheel) until card N enters the viewport. */
-async function scrollCardIntoView(tabId: number, adapter: SiteAdapter, index: number): Promise<void> {
+type Rect = Point & { top: number; bottom: number };
+
+/**
+ * Real scroll (mouseWheel) until the element described by rectExpr enters
+ * the viewport. Returns its final rect (for the caller to click), or null
+ * if it doesn't exist (a card gone past the end of the list, or — for the
+ * pagination control — no next page at all). Shared by card-by-card
+ * scrolling and scrolling to the "next page" control, which lives at the
+ * bottom of the same scrollable results panel.
+ */
+async function scrollUntilVisible(tabId: number, adapter: SiteAdapter, rectExpr: string): Promise<Rect | null> {
   const containerRect = await evaluate<Point | null>(tabId, adapter.scrollContainerRectExpr);
   const scrollPoint: Point = containerRect ?? { x: 400, y: 400 };
 
+  let rect: Rect | null = null;
   for (let attempt = 0; attempt < adapter.timings.maxScrollAttempts; attempt++) {
-    const rect = await evaluate<{ top: number; bottom: number } | null>(tabId, adapter.cardRectExpr(index));
-    if (!rect) return; // the card doesn't exist (yet, or anymore): end of the list
+    rect = await evaluate<Rect | null>(tabId, rectExpr);
+    if (!rect) return null;
 
     const viewport = await evaluate<{ h: number }>(tabId, '({ h: window.innerHeight })');
     const visible = rect.top >= 0 && rect.bottom <= viewport.h;
-    if (visible) return;
+    if (visible) return rect;
 
     const direction = rect.top < 0 ? -1 : 1;
     await realScroll(tabId, scrollPoint, direction * adapter.timings.scrollStepPx);
   }
+  return rect;
 }
 
 type ProcessOutcome =
@@ -70,9 +81,7 @@ async function processCard(
   index: number,
   existingJobIds: ReadonlySet<string>,
 ): Promise<ProcessOutcome> {
-  await scrollCardIntoView(tabId, adapter, index);
-
-  const rect = await evaluate<Point | null>(tabId, adapter.cardRectExpr(index));
+  const rect = await scrollUntilVisible(tabId, adapter, adapter.cardRectExpr(index));
   if (!rect) return { kind: 'empty' };
 
   await realClick(tabId, rect);
@@ -131,7 +140,7 @@ async function processCard(
  * results, not just a batch-size stop.
  */
 async function goToNextPage(tabId: number, adapter: SiteAdapter): Promise<boolean> {
-  const rect = await evaluate<Point | null>(tabId, adapter.nextPageRectExpr);
+  const rect = await scrollUntilVisible(tabId, adapter, adapter.nextPageRectExpr);
   if (!rect) return false;
 
   await realClick(tabId, rect);
