@@ -1,5 +1,6 @@
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
 import type { RunState } from './lib/storage';
+import { dedupeResults } from './lib/storage';
 import type { JobResult } from './adapters/types';
 
 function send(message: ExtensionMessage): Promise<ExtensionResponse> {
@@ -25,7 +26,7 @@ function renderState(state: RunState): void {
     stats.push(`page ${Math.min(state.currentIndex, state.currentPageCount)}/${state.currentPageCount}`);
   }
   stats.push(`${state.pagesCompleted} page(s) completed`);
-  stats.push(`${state.results.length} unique`);
+  stats.push(`${state.results.length} processed`);
   stats.push(`${state.duplicates.length} duplicates skipped`);
   document.getElementById('stats')!.textContent = stats.join(' · ');
 
@@ -36,6 +37,7 @@ function renderState(state: RunState): void {
   (document.getElementById('start') as HTMLButtonElement).hidden = isRunning;
   (document.getElementById('stop') as HTMLButtonElement).hidden = !isRunning;
   (document.getElementById('clear') as HTMLButtonElement).disabled = isRunning;
+  (document.getElementById('dedupe') as HTMLButtonElement).disabled = isRunning;
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
@@ -43,7 +45,7 @@ function renderState(state: RunState): void {
   if (state.currentJob) {
     const tr = document.createElement('tr');
     tr.className = 'processing';
-    tr.innerHTML = `<td>…</td><td>${escapeHtml(state.currentJob.title)}</td><td>${escapeHtml(state.currentJob.company)}</td>`;
+    tr.innerHTML = `<td>…</td><td>${escapeHtml(state.currentJob.title)}</td><td>${escapeHtml(state.currentJob.company)}</td><td>${escapeHtml(state.currentJob.jobId)}</td>`;
     tbody.appendChild(tr);
   }
 
@@ -54,13 +56,13 @@ function renderState(state: RunState): void {
   const rows: Row[] = [];
   for (const r of state.results) {
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${r.score ?? '—'}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.company)}</td>`;
+    tr.innerHTML = `<td>${r.score ?? '—'}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.company)}</td><td>${escapeHtml(r.jobId)}</td>`;
     rows.push({ seq: r.seq, el: tr });
   }
   for (const d of state.duplicates) {
     const tr = document.createElement('tr');
     tr.className = 'duplicate';
-    tr.innerHTML = `<td>dup</td><td>${escapeHtml(d.title)}</td><td>${escapeHtml(d.company)}</td>`;
+    tr.innerHTML = `<td>dup</td><td>${escapeHtml(d.title)}</td><td>${escapeHtml(d.company)}</td><td>${escapeHtml(d.jobId)}</td>`;
     rows.push({ seq: d.seq, el: tr });
   }
   rows.sort((a, b) => b.seq - a.seq);
@@ -124,12 +126,14 @@ document.getElementById('stop')!.addEventListener('click', async () => {
 
 document.getElementById('exportCsv')!.addEventListener('click', async () => {
   const res = await send({ type: 'GET_STATE' });
-  if (res.ok && res.data) download('job-matches.csv', 'text/csv', toCsv(byScoreDesc((res.data as RunState).results)));
+  if (res.ok && res.data) download('job-matches.csv', 'text/csv', toCsv(byScoreDesc(dedupeResults((res.data as RunState).results))));
 });
 
 document.getElementById('exportJson')!.addEventListener('click', async () => {
   const res = await send({ type: 'GET_STATE' });
-  if (res.ok && res.data) download('job-matches.json', 'application/json', toExportJson(byScoreDesc((res.data as RunState).results)));
+  if (res.ok && res.data) {
+    download('job-matches.json', 'application/json', toExportJson(byScoreDesc(dedupeResults((res.data as RunState).results))));
+  }
 });
 
 document.getElementById('clear')!.addEventListener('click', async () => {
@@ -138,6 +142,18 @@ document.getElementById('clear')!.addEventListener('click', async () => {
   if (!res.ok) {
     console.error('[ai-job-analyzer] Clear failed:', res.error);
     document.getElementById('error')!.textContent = res.error;
+  }
+});
+
+document.getElementById('dedupe')!.addEventListener('click', async () => {
+  const res = await send({ type: 'DEDUPE' });
+  await refresh();
+  if (!res.ok) {
+    console.error('[ai-job-analyzer] Dedupe failed:', res.error);
+    document.getElementById('error')!.textContent = res.error;
+  } else {
+    const removed = (res.data as { removed: number } | undefined)?.removed ?? 0;
+    document.getElementById('error')!.textContent = `Removed ${removed} duplicate result(s).`;
   }
 });
 

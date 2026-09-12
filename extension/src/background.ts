@@ -1,5 +1,5 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
-import { getState, setState, resetState, appendResult, appendDuplicate } from './lib/storage';
+import { getState, setState, resetState, appendResult, appendDuplicate, dedupeResults } from './lib/storage';
 import { findAdapter } from './adapters/registry';
 import type { SiteAdapter, JobResult } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
@@ -217,6 +217,23 @@ async function clear(): Promise<ExtensionResponse> {
   return { ok: true };
 }
 
+/**
+ * Collapses `results` down to one entry per jobId (keeping the earliest,
+ * i.e. lowest `seq`), for cleaning up duplicates that were scored twice
+ * before jobId came from the detail panel URL instead of the card's
+ * componentkey. Unlike Clear, this only touches `results` — nothing is
+ * reprocessed, so no tokens are spent re-running anything.
+ */
+async function dedupe(): Promise<ExtensionResponse> {
+  const current = await getState();
+  if (current.status === 'running') return { ok: false, error: 'Stop the run before removing duplicates.' };
+
+  const deduped = dedupeResults(current.results);
+  const removed = current.results.length - deduped.length;
+  await setState({ results: deduped });
+  return { ok: true, data: { removed } };
+}
+
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
   (async () => {
     switch (message.type) {
@@ -228,6 +245,9 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
         break;
       case 'CLEAR':
         sendResponse(await clear());
+        break;
+      case 'DEDUPE':
+        sendResponse(await dedupe());
         break;
       case 'GET_STATE':
         sendResponse({ ok: true, data: await getState() });

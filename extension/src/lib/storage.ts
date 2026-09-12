@@ -91,3 +91,19 @@ export async function appendDuplicate(entry: Omit<DuplicateEntry, 'seq'>): Promi
   const withSeq: DuplicateEntry = { ...entry, seq: current.nextSeq };
   return setState({ duplicates: [...current.duplicates, withSeq], nextSeq: current.nextSeq + 1 });
 }
+
+/**
+ * Collapses down to one entry per jobId (keeping the earliest — i.e. lowest
+ * `seq`). Shared by the "Remove duplicates" action (which persists the
+ * result) and CSV/JSON export (which doesn't) — both should treat "no
+ * duplicate jobIds" as a guarantee, not something the user has to remember
+ * to trigger first.
+ */
+export function dedupeResults(results: JobResult[]): JobResult[] {
+  const seen = new Set<string>();
+  return results.filter((r) => {
+    if (r.jobId && seen.has(r.jobId)) return false;
+    if (r.jobId) seen.add(r.jobId);
+    return true;
+  });
+}

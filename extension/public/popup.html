@@ -21,9 +21,10 @@
        above, needed to keep the header fixed while the body scrolls), so
        fixed layout can't infer column widths from the real header row —
        every row needs its own matching widths via nth-child. */
-    th:nth-child(1), td:nth-child(1) { width: 15%; }
-    th:nth-child(2), td:nth-child(2) { width: 55%; }
-    th:nth-child(3), td:nth-child(3) { width: 30%; }
+    th:nth-child(1), td:nth-child(1) { width: 10%; }
+    th:nth-child(2), td:nth-child(2) { width: 38%; }
+    th:nth-child(3), td:nth-child(3) { width: 27%; }
+    th:nth-child(4), td:nth-child(4) { width: 25%; }
     tr.processing { background: #eee; font-style: italic; color: #555; }
     tr.duplicate { background: #f7f7f7; color: #999; }
     #disclaimer { font-size: 10px; color: #a00; line-height: 1.4; }
@@ -43,10 +44,12 @@
     <button id="exportJson">Export JSON</button>
   </div>
   <div class="row">
+    <button id="dedupe">Remove duplicates</button>
     <button id="clear">Clear results</button>
   </div>
   <table id="results">
-    <thead><tr><th>Score</th><th>Title</th><th>Company</th></tr></thead>
+    <!-- TEMP: Job ID column added to diagnose the dedup button; remove once confirmed. -->
+    <thead><tr><th>Score</th><th>Title</th><th>Company</th><th>Job ID</th></tr></thead>
     <tbody></tbody>
   </table>
   <div id="disclaimer">
