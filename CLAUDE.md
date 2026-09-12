@@ -19,6 +19,13 @@ Two independent parts:
   `background.ts` degrades gracefully (`score: null`) when this service
   isn't running, so the extension is testable standalone.
 
+`resources/` holds local, gitignored files the user drops in (only
+`resources/cv/` today — the CV PDF; more subfolders may be added later).
+`scripts/start.sh` is the one-command entry point: builds the extension,
+resolves `CV_PATH` from `resources/cv/` if not already set, builds and
+starts `matching-service`, and launches Chrome with the extension pre-loaded
+in a dedicated profile.
+
 ## Language convention
 
 All generated content — code, comments, commit messages, docs — must be in
@@ -46,6 +53,14 @@ introduce Spanish into any file in this repository.
   explicit instruction.
 
 ## Commands
+
+Run everything at once with `./scripts/start.sh` (from the repo root) —
+builds the extension, resolves the CV from `resources/cv/`, builds and starts
+`matching-service`, and launches Chrome with the extension pre-loaded.
+Requires `ANTHROPIC_API_KEY` exported and exactly one PDF in `resources/cv/`
+(or `CV_PATH` set explicitly).
+
+To run each half individually:
 
 All commands run from `extension/`. Use **yarn**, not npm, for this project.
 

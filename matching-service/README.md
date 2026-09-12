@@ -12,10 +12,14 @@ written to disk; job postings and responses aren't logged or stored anywhere.
 
 ## Setup
 
+The easiest way to run this alongside the extension is `../scripts/start.sh`
+(see the root README's Quick start) — drop your CV in `../resources/cv/` and
+it resolves `CV_PATH` for you. To run just this service manually:
+
 ```bash
 cd matching-service
 export ANTHROPIC_API_KEY=sk-ant-...   # required
-export CV_PATH=/absolute/path/to/your-cv.pdf   # required
+export CV_PATH=/absolute/path/to/your-cv.pdf   # required (or ../resources/cv/<file>.pdf)
 # export PORT=8787                    # optional, defaults to 8787
 # export ANTHROPIC_MODEL=claude-opus-5 # optional, defaults to claude-opus-5
 

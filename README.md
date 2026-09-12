@@ -23,8 +23,8 @@ any other job board.
 ```
 ┌─────────────────────────┐        fetch localhost         ┌──────────────────────┐
 │  Extension (TS, MV3)     │ ─────────────────────────────▶ │ matching-service (Go) │
-│                          │                                 │  (next phase)         │
-│  popup:  Start / Stop /  │                                 │  - parses your CV(PDF)│
+│                          │                                 │                       │
+│  popup:  Start / Stop /  │                                 │  - reads your CV(PDF) │
 │          export CSV/JSON │                                 │  - calls Claude API   │
 │                          │ ◀───────────────────────────── │  - returns score 0-100 │
 │  background: scoring     │        { score, reasoning }     └──────────────────────┘
@@ -58,6 +58,35 @@ any other job board.
 - `extension/` — Chrome MV3 extension in TypeScript (functional skeleton).
 - `matching-service/` — Go scoring service (CV + Claude API), see
   `matching-service/README.md`.
+- `resources/` — local, gitignored files you drop in yourself. Today just
+  `resources/cv/` (your CV PDF); more subfolders may be added later as the
+  project needs other personal inputs.
+- `scripts/` — convenience scripts; `scripts/start.sh` runs everything with
+  one command (see Quick start below).
+
+## Quick start (one command)
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+cp /path/to/your-cv.pdf resources/cv/
+./scripts/start.sh
+```
+
+This builds the extension, builds and starts `matching-service`, and (if
+Chrome is installed at the usual macOS path) opens it with the extension
+already loaded, in a dedicated profile that never touches your regular
+Chrome session or its logins. Stop everything with `Ctrl+C`, or by closing
+that Chrome window.
+
+`resources/cv/` must contain exactly one PDF (the script errors out if it's
+empty or has more than one — set `CV_PATH` explicitly to disambiguate). If
+Chrome isn't found automatically, the script still starts
+`matching-service` and tells you to load `extension/dist` manually via
+`chrome://extensions`. Override the Chrome binary with `CHROME_BIN=...` or
+the port with `PORT=...` if needed.
+
+The sections below cover running each half manually, and are what
+`scripts/start.sh` does under the hood.
 
 ## Extension: running it locally
 
@@ -93,7 +122,7 @@ need any changes.
 ```bash
 cd matching-service
 export ANTHROPIC_API_KEY=sk-ant-...
-export CV_PATH=/absolute/path/to/your-cv.pdf
+export CV_PATH=/absolute/path/to/your-cv.pdf   # or drop it in resources/cv/ and use scripts/start.sh instead
 go build -o bin/matching-service .
 ./bin/matching-service
 ```
