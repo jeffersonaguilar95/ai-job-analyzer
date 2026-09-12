@@ -52,8 +52,11 @@ async function refresh(): Promise<void> {
 
 document.getElementById('start')!.addEventListener('click', async () => {
   const res = await send({ type: 'START' });
-  if (!res.ok) alert(res.error);
   await refresh();
+  if (!res.ok) {
+    console.error('[ai-job-analyzer] Start failed:', res.error);
+    document.getElementById('error')!.textContent = res.error;
+  }
 });
 
 document.getElementById('stop')!.addEventListener('click', async () => {
