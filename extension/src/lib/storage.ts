@@ -1,6 +1,12 @@
 import type { JobResult } from '../adapters/types';
 
-export type RunStatus = 'idle' | 'running' | 'paused' | 'done' | 'error';
+/**
+ * 'batchLimitReached' means the page cap (see Settings) was hit with more
+ * pages likely still available — distinct from 'done', which means the
+ * adapter couldn't find a next page at all. Start uses this distinction to
+ * decide whether to click to the next page before resuming.
+ */
+export type RunStatus = 'idle' | 'running' | 'paused' | 'done' | 'batchLimitReached' | 'error';
 
 /** A card recognized (by jobId) as already present in `results`, skipped without scoring it again. */
 export interface DuplicateEntry {
@@ -106,4 +112,31 @@ export function dedupeResults(results: JobResult[]): JobResult[] {
     if (r.jobId) seen.add(r.jobId);
     return true;
   });
+}
+
+/**
+ * User preferences — kept under a separate storage key from RunState so
+ * Clear (which resets the run) doesn't also reset configuration.
+ */
+export interface Settings {
+  /** How many pages of results one Start click processes before stopping (clicking Start again continues with the next batch). */
+  maxPagesPerBatch: number;
+}
+
+const SETTINGS_KEY = 'settings';
+
+function defaultSettings(): Settings {
+  return { maxPagesPerBatch: 5 };
+}
+
+export async function getSettings(): Promise<Settings> {
+  const data = await chrome.storage.local.get(SETTINGS_KEY);
+  return { ...defaultSettings(), ...(data[SETTINGS_KEY] as Partial<Settings> | undefined) };
+}
+
+export async function setSettings(patch: Partial<Settings>): Promise<Settings> {
+  const current = await getSettings();
+  const next = { ...current, ...patch };
+  await chrome.storage.local.set({ [SETTINGS_KEY]: next });
+  return next;
 }

@@ -1,6 +1,6 @@
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
 import type { RunState } from './lib/storage';
-import { dedupeResults } from './lib/storage';
+import { dedupeResults, getSettings, setSettings } from './lib/storage';
 import type { JobResult } from './adapters/types';
 
 function send(message: ExtensionMessage): Promise<ExtensionResponse> {
@@ -17,9 +17,13 @@ function byScoreDesc(results: JobResult[]): JobResult[] {
   return [...results].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
 }
 
+function humanizeStatus(status: string): string {
+  return status.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+}
+
 function renderState(state: RunState): void {
   const statusEl = document.getElementById('status')!;
-  statusEl.textContent = `Status: ${state.status}`;
+  statusEl.textContent = `Status: ${humanizeStatus(state.status)}`;
 
   const stats = [];
   if (state.currentPageCount !== null) {
@@ -39,6 +43,7 @@ function renderState(state: RunState): void {
   (document.getElementById('clear') as HTMLButtonElement).disabled = isRunning;
   (document.getElementById('dedupe') as HTMLButtonElement).disabled = isRunning;
   (document.getElementById('rescore') as HTMLButtonElement).disabled = isRunning;
+  (document.getElementById('maxPages') as HTMLInputElement).disabled = isRunning;
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
@@ -174,8 +179,21 @@ document.getElementById('rescore')!.addEventListener('click', async (e) => {
   btn.disabled = false;
 });
 
+document.getElementById('maxPages')!.addEventListener('change', async (e) => {
+  const raw = parseInt((e.target as HTMLInputElement).value, 10);
+  const value = Number.isFinite(raw) ? Math.max(1, raw) : 5;
+  await setSettings({ maxPagesPerBatch: value });
+  (document.getElementById('maxPages') as HTMLInputElement).value = String(value);
+});
+
+async function loadSettings(): Promise<void> {
+  const settings = await getSettings();
+  (document.getElementById('maxPages') as HTMLInputElement).value = String(settings.maxPagesPerBatch);
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes.runState) void refresh();
 });
 
 void refresh();
+void loadSettings();

@@ -1,5 +1,5 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
-import { getState, setState, resetState, appendResult, appendDuplicate, dedupeResults } from './lib/storage';
+import { getState, setState, resetState, appendResult, appendDuplicate, dedupeResults, getSettings } from './lib/storage';
 import { findAdapter } from './adapters/registry';
 import type { SiteAdapter, JobResult } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
@@ -124,7 +124,30 @@ async function processCard(
   };
 }
 
-async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
+/**
+ * Clicks the adapter's "next page" control and waits for the new page's
+ * cards to load. Returns false (no click attempted) if the adapter reports
+ * there's no next page — the caller treats that as genuinely out of
+ * results, not just a batch-size stop.
+ */
+async function goToNextPage(tabId: number, adapter: SiteAdapter): Promise<boolean> {
+  const rect = await evaluate<Point | null>(tabId, adapter.nextPageRectExpr);
+  if (!rect) return false;
+
+  await realClick(tabId, rect);
+
+  for (let attempt = 0; attempt < adapter.timings.maxPageLoadWaitAttempts; attempt++) {
+    const count = await evaluate<number>(tabId, adapter.countCardsExpr);
+    if (count > 0) break;
+    await sleep(adapter.timings.afterClickMs);
+  }
+
+  return true;
+}
+
+async function runLoop(tabId: number, adapter: SiteAdapter, maxPagesPerBatch: number): Promise<void> {
+  let pagesThisBatch = 0;
+
   while (true) {
     const state = await getState();
     if (state.status !== 'running') break; // Stop requested: nothing already processed is lost
@@ -132,8 +155,25 @@ async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
     const count = await evaluate<number>(tabId, adapter.countCardsExpr);
     await setState({ currentPageCount: count });
     if (state.currentIndex >= count) {
-      await setState({ status: 'done', pagesCompleted: state.pagesCompleted + 1 });
-      break;
+      pagesThisBatch++;
+      const pagesCompleted = state.pagesCompleted + 1;
+
+      if (pagesThisBatch >= maxPagesPerBatch) {
+        // Hit the batch cap with (likely) more pages left — stop without
+        // advancing, so the next Start click can tell "click next first"
+        // (batchLimitReached) apart from "genuinely done" (done).
+        await setState({ status: 'batchLimitReached', pagesCompleted });
+        break;
+      }
+
+      const advanced = await goToNextPage(tabId, adapter);
+      if (!advanced) {
+        await setState({ status: 'done', pagesCompleted });
+        break;
+      }
+
+      await setState({ pagesCompleted, currentIndex: 0, currentPageCount: null });
+      continue;
     }
 
     // Best-effort only, for the "currently processing" indicator — not
@@ -186,8 +226,18 @@ async function start(): Promise<ExtensionResponse> {
   const adapter = findAdapter(tab.url!);
   if (!adapter) return { ok: false, error: `No adapter for this URL: ${tab.url}` };
 
-  const resumingSamePage = current.status === 'paused' && current.tabId === tab.id && current.adapterId === adapter.id;
-  if (!resumingSamePage) {
+  await attach(tab.id!);
+
+  const sameTabAndAdapter = current.tabId === tab.id && current.adapterId === adapter.id;
+  const resumingSamePage = current.status === 'paused' && sameTabAndAdapter;
+  const continuingNextBatch = current.status === 'batchLimitReached' && sameTabAndAdapter;
+
+  if (continuingNextBatch) {
+    // The previous batch stopped right after finishing a page (without
+    // advancing) specifically so this click could click "next" first.
+    await goToNextPage(tab.id!, adapter);
+    await setState({ currentIndex: 0, currentPageCount: null, error: null });
+  } else if (!resumingSamePage) {
     // Not resuming the exact page we paused on: treat this as a fresh page
     // (e.g. the user navigated to LinkedIn's next results page and clicked
     // Start again). Card indices are per-page, so restart counting from 0 —
@@ -196,10 +246,10 @@ async function start(): Promise<ExtensionResponse> {
     await setState({ currentIndex: 0, error: null });
   }
 
-  await attach(tab.id!);
   await setState({ status: 'running', tabId: tab.id!, adapterId: adapter.id });
 
-  runLoop(tab.id!, adapter).catch(async (err) => {
+  const { maxPagesPerBatch } = await getSettings();
+  runLoop(tab.id!, adapter, maxPagesPerBatch).catch(async (err) => {
     console.error('[ai-job-analyzer] runLoop failed:', err);
     await setState({ status: 'error', error: String(err) });
     await detach(tab.id!).catch(() => {});

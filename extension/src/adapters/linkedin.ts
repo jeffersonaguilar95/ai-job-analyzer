@@ -65,6 +65,7 @@ export const linkedinAdapter: SiteAdapter = {
     scrollStepPx: 260,
     maxScrollAttempts: 10,
     maxDetailWaitAttempts: 6,
+    maxPageLoadWaitAttempts: 8,
   },
 
   countCardsExpr: `document.querySelectorAll('${CARD_SELECTOR}').length`,
@@ -165,4 +166,10 @@ export const linkedinAdapter: SiteAdapter = {
 
     return { jobId, title, company, location, salary, url, text };
   })()`,
+
+  // PLACEHOLDER — not yet calibrated against a live results page. Always
+  // returns null (no next page found) until this has a real selector, so
+  // automatic pagination just stops cleanly (as if genuinely out of pages)
+  // rather than clicking the wrong thing.
+  nextPageRectExpr: 'null',
 };

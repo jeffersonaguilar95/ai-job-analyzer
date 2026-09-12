@@ -26,6 +26,8 @@ export interface AdapterTimings {
   maxScrollAttempts: number;
   /** Max polls (every afterClickMs) for the detail panel to be ready before extracting anyway. */
   maxDetailWaitAttempts: number;
+  /** Max polls (every afterClickMs) for the next results page to have loaded cards after clicking to it. */
+  maxPageLoadWaitAttempts: number;
 }
 
 /**
@@ -51,4 +53,6 @@ export interface SiteAdapter {
   detailReadyExpr: string;
   /** Expression that extracts {jobId, title, company, location, salary, url, text} after clicking card N. */
   extractExpr(index: number): string;
+  /** Expression that returns {x,y} for the "next page" control, or null if there isn't one (last page of results). */
+  nextPageRectExpr: string;
 }

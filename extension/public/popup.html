@@ -13,6 +13,8 @@
     #status { font-size: 12px; font-weight: 600; margin-bottom: 2px; min-height: 16px; }
     #stats { font-size: 11px; color: #777; margin-bottom: 8px; min-height: 14px; }
     #error { font-size: 11px; color: #d9342b; margin-bottom: 8px; }
+    #settings { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #555; margin-bottom: 8px; }
+    #maxPages { width: 40px; font-size: 11px; padding: 2px 4px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
     th, td { text-align: left; padding: 3px 4px; border-bottom: 1px solid #eee; }
     tbody { display: block; max-height: 220px; overflow-y: auto; }
@@ -35,6 +37,10 @@
   <div id="status">Status: idle</div>
   <div id="stats"></div>
   <div id="error"></div>
+  <div id="settings">
+    <label for="maxPages">Pages per Start:</label>
+    <input id="maxPages" type="number" min="1" max="50" step="1" />
+  </div>
   <div class="row">
     <button id="start">Start</button>
     <button id="stop">■ Stop</button>
