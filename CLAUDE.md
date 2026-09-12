@@ -57,8 +57,10 @@ introduce Spanish into any file in this repository.
 Run everything at once with `./scripts/start.sh` (from the repo root) —
 builds the extension, resolves the CV from `resources/cv/`, builds and starts
 `matching-service`, and launches Chrome with the extension pre-loaded.
-Requires `ANTHROPIC_API_KEY` exported and exactly one PDF in `resources/cv/`
-(or `CV_PATH` set explicitly).
+Requires `ANTHROPIC_API_KEY` and exactly one PDF in `resources/cv/` (or
+`CV_PATH` set explicitly) — either exported in the shell, or via a `.env`
+file (copy `.env.example` to `.env`; gitignored, loaded automatically by
+`start.sh`, and never overrides a variable already exported in the shell).
 
 To run each half individually:
 

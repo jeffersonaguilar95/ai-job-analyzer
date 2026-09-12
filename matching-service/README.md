@@ -14,7 +14,9 @@ written to disk; job postings and responses aren't logged or stored anywhere.
 
 The easiest way to run this alongside the extension is `../scripts/start.sh`
 (see the root README's Quick start) — drop your CV in `../resources/cv/` and
-it resolves `CV_PATH` for you. To run just this service manually:
+it resolves `CV_PATH` for you, loading vars from `../.env` if present. To run
+just this service manually (the binary itself doesn't read `.env` — either
+export the vars directly, or `set -a && source ../.env && set +a` first):
 
 ```bash
 cd matching-service

@@ -67,10 +67,15 @@ any other job board.
 ## Quick start (one command)
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env   # then edit .env and set your ANTHROPIC_API_KEY
 cp /path/to/your-cv.pdf resources/cv/
 ./scripts/start.sh
 ```
+
+`scripts/start.sh` loads `.env` automatically (see `.env.example` for all
+supported variables) — anything already exported in your shell takes
+precedence, so `ANTHROPIC_API_KEY=... ./scripts/start.sh` still works without
+a `.env` file. `.env` is gitignored; only `.env.example` is committed.
 
 This builds the extension, builds and starts `matching-service`, and (if
 Chrome is installed at the usual macOS path) opens it with the extension
