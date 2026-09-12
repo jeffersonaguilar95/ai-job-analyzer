@@ -19,6 +19,24 @@ CHROME_PROFILE_DIR="$ROOT_DIR/.chrome-profile"
 log()  { printf '\033[1;34m[start]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[start]\033[0m %s\n' "$*" >&2; exit 1; }
 
+# Loads KEY=VALUE lines from .env, without overriding anything already
+# exported in the calling shell (a real `export FOO=...` always wins).
+load_env_file() {
+  local env_file="$1"
+  [[ -f "$env_file" ]] || return 0
+  local key value
+  while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    value="${value%\"}"; value="${value#\"}"
+    value="${value%\'}"; value="${value#\'}"
+    if [[ -z "${!key:-}" ]]; then
+      export "$key=$value"
+    fi
+  done < "$env_file"
+}
+
+load_env_file "$ROOT_DIR/.env"
+
 command -v yarn >/dev/null 2>&1 || fail "yarn is not installed (needed to build the extension)."
 command -v go   >/dev/null 2>&1 || fail "go is not installed (needed to build matching-service)."
 [[ -n "${ANTHROPIC_API_KEY:-}" ]] || fail "ANTHROPIC_API_KEY is not set. Export it before running this script."
