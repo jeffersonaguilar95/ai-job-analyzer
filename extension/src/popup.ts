@@ -19,6 +19,10 @@ function renderState(state: RunState): void {
   const errorEl = document.getElementById('error')!;
   errorEl.textContent = state.error ?? '';
 
+  const isRunning = state.status === 'running';
+  (document.getElementById('start') as HTMLButtonElement).hidden = isRunning;
+  (document.getElementById('stop') as HTMLButtonElement).hidden = !isRunning;
+
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
   const sorted = [...state.results].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
