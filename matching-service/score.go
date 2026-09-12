@@ -23,12 +23,25 @@ var scoreSchema = map[string]any{
 			"type":        "integer",
 			"description": "Match score from 0 (no fit) to 100 (excellent fit) between the CV and this job posting.",
 		},
+		"strengths": map[string]any{
+			"type":        "array",
+			"items":       map[string]any{"type": "string"},
+			"description": "2-5 short, specific reasons this CV is a good match (matching skills, technologies, experience, seniority).",
+		},
+		"gaps": map[string]any{
+			"type":  "array",
+			"items": map[string]any{"type": "string"},
+			"description": "2-5 short, specific reasons the score isn't higher — skills/technologies/experience the " +
+				"posting asks for that aren't clearly reflected in the CV. When something reads as a gap only " +
+				"because the CV doesn't spell it out (not because it's necessarily absent), say so explicitly " +
+				"(e.g. \"not mentioned in the CV, but may still apply\") instead of stating it as a firm lack.",
+		},
 		"reasoning": map[string]any{
 			"type":        "string",
-			"description": "2-4 sentences covering relevant experience, matching/missing technologies, and seniority fit.",
+			"description": "1-2 sentence overall summary of the fit, complementing strengths/gaps (don't repeat them verbatim).",
 		},
 	},
-	"required":             []string{"score", "reasoning"},
+	"required":             []string{"score", "strengths", "gaps", "reasoning"},
 	"additionalProperties": false,
 }
 
@@ -56,13 +69,17 @@ type analyzeRequest struct {
 }
 
 type analyzeResponse struct {
-	Score     *int   `json:"score"`
-	Reasoning string `json:"reasoning"`
+	Score     *int     `json:"score"`
+	Strengths []string `json:"strengths"`
+	Gaps      []string `json:"gaps"`
+	Reasoning string   `json:"reasoning"`
 }
 
 type scoreResult struct {
-	Score     int    `json:"score"`
-	Reasoning string `json:"reasoning"`
+	Score     int      `json:"score"`
+	Strengths []string `json:"strengths"`
+	Gaps      []string `json:"gaps"`
+	Reasoning string   `json:"reasoning"`
 }
 
 func (s *scorer) handleAnalyze(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +111,7 @@ func (s *scorer) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 
 func (s *scorer) score(ctx context.Context, req analyzeRequest) (analyzeResponse, error) {
 	prompt := fmt.Sprintf(
-		"Job title: %s\nCompany: %s\n\nJob posting:\n%s\n\nCompare this job posting against the attached CV. Consider relevant experience, matching and missing technologies, and seniority fit. Return a score from 0 to 100 and a brief reasoning.",
+		"Job title: %s\nCompany: %s\n\nJob posting:\n%s\n\nCompare this job posting against the attached CV. Consider relevant experience, matching and missing technologies, and seniority fit. Return a score from 0 to 100, the specific strengths and gaps behind it, and a brief overall reasoning.",
 		req.Title, req.Company, req.Text,
 	)
 
@@ -127,7 +144,7 @@ func (s *scorer) score(ctx context.Context, req analyzeRequest) (analyzeResponse
 				return analyzeResponse{}, fmt.Errorf("failed to parse structured output: %w", err)
 			}
 			score := result.Score
-			return analyzeResponse{Score: &score, Reasoning: result.Reasoning}, nil
+			return analyzeResponse{Score: &score, Strengths: result.Strengths, Gaps: result.Gaps, Reasoning: result.Reasoning}, nil
 		}
 	}
 

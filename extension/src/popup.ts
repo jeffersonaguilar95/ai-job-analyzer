@@ -36,11 +36,23 @@ function download(filename: string, mime: string, content: string): void {
 }
 
 function toCsv(results: JobResult[]): string {
-  const header = ['score', 'title', 'company', 'location', 'url'];
+  const header = ['score', 'title', 'company', 'location', 'url', 'strengths', 'gaps', 'reasoning'];
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const joinPoints = (points: string[]) => points.map((p) => `- ${p}`).join('\n');
   const lines = [header.join(',')];
   for (const r of results) {
-    lines.push([escape(r.score ?? ''), escape(r.title), escape(r.company), escape(r.location), escape(r.url)].join(','));
+    lines.push(
+      [
+        escape(r.score ?? ''),
+        escape(r.title),
+        escape(r.company),
+        escape(r.location),
+        escape(r.url),
+        escape(joinPoints(r.strengths)),
+        escape(joinPoints(r.gaps)),
+        escape(r.reasoning ?? ''),
+      ].join(','),
+    );
   }
   return lines.join('\n');
 }

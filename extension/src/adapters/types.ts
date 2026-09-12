@@ -6,6 +6,8 @@ export interface JobResult {
   url: string;
   text: string;
   score: number | null;
+  strengths: string[];
+  gaps: string[];
   reasoning: string | null;
   scoredAt: string | null;
 }

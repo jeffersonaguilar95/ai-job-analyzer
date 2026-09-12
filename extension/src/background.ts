@@ -15,7 +15,7 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
 
 async function analyzeWithGoService(
   job: Pick<JobResult, 'title' | 'company' | 'text'>,
-): Promise<{ score: number | null; reasoning: string | null }> {
+): Promise<Pick<JobResult, 'score' | 'strengths' | 'gaps' | 'reasoning'>> {
   try {
     const res = await fetch(GO_SERVICE_URL, {
       method: 'POST',
@@ -23,11 +23,21 @@ async function analyzeWithGoService(
       body: JSON.stringify(job),
     });
     if (!res.ok) throw new Error(`Go service responded ${res.status}`);
-    const data = (await res.json()) as { score?: number; reasoning?: string };
-    return { score: data.score ?? null, reasoning: data.reasoning ?? null };
+    const data = (await res.json()) as {
+      score?: number;
+      strengths?: string[];
+      gaps?: string[];
+      reasoning?: string;
+    };
+    return {
+      score: data.score ?? null,
+      strengths: data.strengths ?? [],
+      gaps: data.gaps ?? [],
+      reasoning: data.reasoning ?? null,
+    };
   } catch (err) {
     console.warn('[ai-job-analyzer] Go service not available yet:', err);
-    return { score: null, reasoning: 'Matching service (Go) not available.' };
+    return { score: null, strengths: [], gaps: [], reasoning: 'Matching service (Go) not available.' };
   }
 }
 
@@ -63,7 +73,7 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
     adapter.extractExpr(index),
   );
 
-  const { score, reasoning } = await analyzeWithGoService(extracted);
+  const { score, strengths, gaps, reasoning } = await analyzeWithGoService(extracted);
 
   return {
     index,
@@ -73,6 +83,8 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
     url: extracted.url,
     text: extracted.text,
     score,
+    strengths,
+    gaps,
     reasoning,
     scoredAt: new Date().toISOString(),
   };
