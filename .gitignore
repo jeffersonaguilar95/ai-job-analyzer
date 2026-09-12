@@ -20,7 +20,16 @@ matching-service/matching-service
 claude_api_key*
 cv.pdf
 *.cv.pdf
-/cv/
+
+# resources/ holds personal files dropped in locally (CV today, more later).
+# Folder structure is tracked via .gitkeep; actual file contents are not.
+resources/**
+!resources/**/
+!resources/**/.gitkeep
 
 # Exported results (contain personal matching data)
 job-matches.*
+
+# Chrome profile scripts/start.sh launches for the extension — not your
+# regular Chrome profile, but still local browser state, never committed
+/.chrome-profile/
