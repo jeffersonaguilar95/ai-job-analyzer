@@ -38,6 +38,7 @@ function renderState(state: RunState): void {
   (document.getElementById('stop') as HTMLButtonElement).hidden = !isRunning;
   (document.getElementById('clear') as HTMLButtonElement).disabled = isRunning;
   (document.getElementById('dedupe') as HTMLButtonElement).disabled = isRunning;
+  (document.getElementById('rescore') as HTMLButtonElement).disabled = isRunning;
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
@@ -155,6 +156,22 @@ document.getElementById('dedupe')!.addEventListener('click', async () => {
     const removed = (res.data as { removed: number } | undefined)?.removed ?? 0;
     document.getElementById('error')!.textContent = `Removed ${removed} duplicate result(s).`;
   }
+});
+
+document.getElementById('rescore')!.addEventListener('click', async (e) => {
+  const btn = e.currentTarget as HTMLButtonElement;
+  btn.disabled = true;
+  const res = await send({ type: 'RESCORE' });
+  await refresh();
+  if (!res.ok) {
+    console.error('[ai-job-analyzer] Rescore failed:', res.error);
+    document.getElementById('error')!.textContent = res.error;
+  } else {
+    const data = res.data as { attempted: number; rescored: number; skippedNoText: number } | undefined;
+    const skippedNote = data?.skippedNoText ? ` (${data.skippedNoText} skipped — no stored description)` : '';
+    document.getElementById('error')!.textContent = `Rescored ${data?.rescored ?? 0}/${data?.attempted ?? 0} null result(s)${skippedNote}.`;
+  }
+  btn.disabled = false;
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {

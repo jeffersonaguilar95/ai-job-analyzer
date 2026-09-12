@@ -239,6 +239,40 @@ async function dedupe(): Promise<ExtensionResponse> {
   return { ok: true, data: { removed } };
 }
 
+/**
+ * Re-runs analyzeWithGoService for every result with score: null. No
+ * LinkedIn interaction at all — `text`/`title`/`company` are already
+ * stored from the original extraction, so this is just a fetch to
+ * matching-service per candidate, same as the original scoring call.
+ * Entries with no stored `text` (the description was never captured) are
+ * skipped — retrying those would just 400 again, since there's nothing to
+ * re-send that would change.
+ */
+async function rescoreNulls(): Promise<ExtensionResponse> {
+  const current = await getState();
+  if (current.status === 'running') return { ok: false, error: 'Stop the run before rescoring.' };
+
+  const candidates = current.results.filter((r) => r.score === null);
+  const retryable = candidates.filter((r) => r.text);
+  let rescored = 0;
+
+  for (const r of retryable) {
+    const { score, strengths, gaps, reasoning } = await analyzeWithGoService(r);
+    if (score !== null) rescored++;
+
+    const latest = await getState();
+    const updated = latest.results.map((x) =>
+      x.seq === r.seq ? { ...x, score, strengths, gaps, reasoning, scoredAt: new Date().toISOString() } : x,
+    );
+    await setState({ results: updated });
+  }
+
+  return {
+    ok: true,
+    data: { attempted: retryable.length, rescored, skippedNoText: candidates.length - retryable.length },
+  };
+}
+
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
   (async () => {
     switch (message.type) {
@@ -253,6 +287,9 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
         break;
       case 'DEDUPE':
         sendResponse(await dedupe());
+        break;
+      case 'RESCORE':
+        sendResponse(await rescoreNulls());
         break;
       case 'GET_STATE':
         sendResponse({ ok: true, data: await getState() });
