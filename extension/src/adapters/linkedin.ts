@@ -23,10 +23,13 @@ function jobIdExprFor(cardExpr: string): string {
 // Shared by extractExpr (after the click) and cardPreviewExpr (before it),
 // so both stay in sync if this needs recalibrating.
 function titleCompanyLocationExprFor(cardExpr: string): string {
+  // Uses `el`, not `card` — callers pass an already-declared `card` variable
+  // as cardExpr, and this runs as its own IIFE, so naming the local the same
+  // would shadow it with a `const el = el`-style TDZ error.
   return `(() => {
-    const card = ${cardExpr};
-    const paragraphs = [...card.querySelectorAll('p')];
-    const titleSpan = card.querySelector('p span[aria-hidden="true"]');
+    const el = ${cardExpr};
+    const paragraphs = [...el.querySelectorAll('p')];
+    const titleSpan = el.querySelector('p span[aria-hidden="true"]');
     const title = titleSpan ? titleSpan.textContent.trim() : (paragraphs[0]?.innerText.trim() ?? '');
     const company = paragraphs[1] ? paragraphs[1].innerText.trim() : '';
     const location = paragraphs[2] ? paragraphs[2].innerText.trim() : '';
