@@ -1,5 +1,5 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
-import { getState, setState, resetState, appendResult } from './lib/storage';
+import { getState, setState, appendResult } from './lib/storage';
 import { findAdapter } from './adapters/registry';
 import type { SiteAdapter, JobResult } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
@@ -123,8 +123,15 @@ async function start(): Promise<ExtensionResponse> {
   const adapter = findAdapter(tab.url!);
   if (!adapter) return { ok: false, error: `No adapter for this URL: ${tab.url}` };
 
-  const resuming = current.status === 'paused' && current.tabId === tab.id && current.adapterId === adapter.id;
-  if (!resuming) await resetState();
+  const resumingSamePage = current.status === 'paused' && current.tabId === tab.id && current.adapterId === adapter.id;
+  if (!resumingSamePage) {
+    // Not resuming the exact page we paused on: treat this as a fresh page
+    // (e.g. the user navigated to LinkedIn's next results page and clicked
+    // Start again). Card indices are per-page, so restart counting from 0 —
+    // but keep `results` accumulating across pages instead of wiping it, so
+    // one CSV/JSON export covers everything scored so far.
+    await setState({ currentIndex: 0, error: null });
+  }
 
   await attach(tab.id!);
   await setState({ status: 'running', tabId: tab.id!, adapterId: adapter.id });
