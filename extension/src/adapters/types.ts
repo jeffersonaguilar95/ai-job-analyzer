@@ -17,13 +17,15 @@ export interface JobResult {
 }
 
 export interface AdapterTimings {
-  /** Wait after the click, before reading the detail panel (to calibrate live). */
+  /** Poll interval while waiting for the detail panel to render after a click (see maxDetailWaitAttempts). */
   afterClickMs: number;
   /** Wait between one card and the next. */
   betweenCardsMs: number;
   /** Magnitude of each scroll step (px equivalent of deltaY). */
   scrollStepPx: number;
   maxScrollAttempts: number;
+  /** Max polls (every afterClickMs) for the detail panel to be ready before extracting anyway. */
+  maxDetailWaitAttempts: number;
 }
 
 /**
@@ -45,6 +47,8 @@ export interface SiteAdapter {
   cardRectExpr(index: number): string;
   /** Reference point (inside the list container) used to fire the scroll. */
   scrollContainerRectExpr: string;
-  /** Expression that extracts {title, company, location, url, text} after clicking card N. */
+  /** Expression that returns true once the detail panel has finished rendering for the just-clicked card (polled after the click, before extractExpr). */
+  detailReadyExpr: string;
+  /** Expression that extracts {jobId, title, company, location, salary, url, text} after clicking card N. */
   extractExpr(index: number): string;
 }

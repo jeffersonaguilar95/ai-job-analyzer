@@ -76,7 +76,12 @@ async function processCard(
   if (!rect) return { kind: 'empty' };
 
   await realClick(tabId, rect);
-  await sleep(adapter.timings.afterClickMs);
+
+  for (let attempt = 0; attempt < adapter.timings.maxDetailWaitAttempts; attempt++) {
+    const ready = await evaluate<boolean>(tabId, adapter.detailReadyExpr);
+    if (ready) break;
+    await sleep(adapter.timings.afterClickMs);
+  }
 
   const extracted = await evaluate<{
     jobId: string;

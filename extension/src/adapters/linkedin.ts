@@ -37,6 +37,14 @@ function titleCompanyLocationExprFor(cardExpr: string): string {
   })()`;
 }
 
+// The last SemanticJobDetails screen in the DOM — there may be stale ones
+// left over from earlier cards, so "last" (not "only") is what identifies
+// the one for the card just clicked.
+const PANEL_EXPR = `(() => {
+  const panels = document.querySelectorAll('[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]');
+  return panels[panels.length - 1] ?? null;
+})()`;
+
 function rectExprFor(elementExpr: string): string {
   return `(() => {
     const el = ${elementExpr};
@@ -56,6 +64,7 @@ export const linkedinAdapter: SiteAdapter = {
     betweenCardsMs: 400,
     scrollStepPx: 260,
     maxScrollAttempts: 10,
+    maxDetailWaitAttempts: 6,
   },
 
   countCardsExpr: `document.querySelectorAll('${CARD_SELECTOR}').length`,
@@ -84,6 +93,13 @@ export const linkedinAdapter: SiteAdapter = {
     const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   })()`,
+
+  // Rendering the detail panel isn't instant and varies with how heavy the
+  // posting/network is — waiting a fixed delay before extractExpr meant
+  // some cards got read before their panel (and thus jobId/url/text/salary)
+  // existed at all, silently producing empty fields. Polled instead: ready
+  // once the panel has a title link to parse the job ID out of.
+  detailReadyExpr: `!!(${PANEL_EXPR}?.querySelector('a[href*="/jobs/view/"]'))`,
 
   // Title/company/location live on the card itself, so they're read straight
   // from it (no dependency on the detail panel's DOM). The title paragraph
@@ -114,8 +130,7 @@ export const linkedinAdapter: SiteAdapter = {
     if (!card) return { jobId: '', title: '', company: '', location: '', salary: '', url: location.href, text: '' };
     const { title, company, location } = ${titleCompanyLocationExprFor('card')};
 
-    const panels = document.querySelectorAll('[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]');
-    const panel = panels[panels.length - 1] ?? null;
+    const panel = ${PANEL_EXPR};
 
     // Authoritative ID: parsed from the detail panel's own title link
     // (/jobs/view/<id>/), not the card's componentkey — that's a UI
