@@ -22,6 +22,7 @@ function renderState(state: RunState): void {
   const isRunning = state.status === 'running';
   (document.getElementById('start') as HTMLButtonElement).hidden = isRunning;
   (document.getElementById('stop') as HTMLButtonElement).hidden = !isRunning;
+  (document.getElementById('clear') as HTMLButtonElement).disabled = isRunning;
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
@@ -62,6 +63,13 @@ function toCsv(results: JobResult[]): string {
   return lines.join('\n');
 }
 
+/** Export shape: same as JobResult minus `text` (the raw JD body), which is
+ * redundant once you have the job's `url`. */
+function toExportJson(results: JobResult[]): string {
+  const exportable = results.map(({ text: _text, ...rest }) => rest);
+  return JSON.stringify(exportable, null, 2);
+}
+
 async function refresh(): Promise<void> {
   const res = await send({ type: 'GET_STATE' });
   if (res.ok && res.data) renderState(res.data as RunState);
@@ -88,7 +96,16 @@ document.getElementById('exportCsv')!.addEventListener('click', async () => {
 
 document.getElementById('exportJson')!.addEventListener('click', async () => {
   const res = await send({ type: 'GET_STATE' });
-  if (res.ok && res.data) download('job-matches.json', 'application/json', JSON.stringify((res.data as RunState).results, null, 2));
+  if (res.ok && res.data) download('job-matches.json', 'application/json', toExportJson((res.data as RunState).results));
+});
+
+document.getElementById('clear')!.addEventListener('click', async () => {
+  const res = await send({ type: 'CLEAR' });
+  await refresh();
+  if (!res.ok) {
+    console.error('[ai-job-analyzer] Clear failed:', res.error);
+    document.getElementById('error')!.textContent = res.error;
+  }
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {

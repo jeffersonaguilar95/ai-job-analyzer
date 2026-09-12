@@ -1,5 +1,5 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
-import { getState, setState, appendResult } from './lib/storage';
+import { getState, setState, resetState, appendResult } from './lib/storage';
 import { findAdapter } from './adapters/registry';
 import type { SiteAdapter, JobResult } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
@@ -157,6 +157,13 @@ async function stop(): Promise<ExtensionResponse> {
   return { ok: true };
 }
 
+async function clear(): Promise<ExtensionResponse> {
+  const current = await getState();
+  if (current.status === 'running') return { ok: false, error: 'Stop the run before clearing results.' };
+  await resetState();
+  return { ok: true };
+}
+
 chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendResponse) => {
   (async () => {
     switch (message.type) {
@@ -165,6 +172,9 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, _sender, sendRe
         break;
       case 'STOP':
         sendResponse(await stop());
+        break;
+      case 'CLEAR':
+        sendResponse(await clear());
         break;
       case 'GET_STATE':
         sendResponse({ ok: true, data: await getState() });
