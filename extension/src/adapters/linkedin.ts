@@ -98,8 +98,19 @@ export const linkedinAdapter: SiteAdapter = {
   // posting/network is — waiting a fixed delay before extractExpr meant
   // some cards got read before their panel (and thus jobId/url/text/salary)
   // existed at all, silently producing empty fields. Polled instead: ready
-  // once the panel has a title link to parse the job ID out of.
-  detailReadyExpr: `!!(${PANEL_EXPR}?.querySelector('a[href*="/jobs/view/"]'))`,
+  // once BOTH the title link (jobId/url) and the "About the job" description
+  // are there — the two loaded independently and a card could pass the
+  // title-only check while the description was still empty, sending an
+  // empty `text` to matching-service (which 400s "text is required" with no
+  // server-side error to log, so it looked like the service was just down).
+  detailReadyExpr: `(() => {
+    const panel = ${PANEL_EXPR};
+    if (!panel) return false;
+    const hasTitle = !!panel.querySelector('a[href*="/jobs/view/"]');
+    const aboutJob = panel.querySelector('[id^="JobDetails_AboutTheJob_"]');
+    const hasDescription = !!(aboutJob && aboutJob.querySelector('span[data-testid="expandable-text-box"]'));
+    return hasTitle && hasDescription;
+  })()`,
 
   // Title/company/location live on the card itself, so they're read straight
   // from it (no dependency on the detail panel's DOM). The title paragraph
