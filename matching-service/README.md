@@ -23,7 +23,7 @@ cd matching-service
 export ANTHROPIC_API_KEY=sk-ant-...   # required
 export CV_PATH=/absolute/path/to/your-cv.pdf   # required (or ../resources/cv/<file>.pdf)
 # export PORT=8787                    # optional, defaults to 8787
-# export ANTHROPIC_MODEL=claude-opus-5 # optional, defaults to claude-opus-5
+# export ANTHROPIC_MODEL=claude-haiku-4-5 # optional, defaults to claude-haiku-4-5
 
 go build -o bin/matching-service .
 ./bin/matching-service
@@ -39,7 +39,7 @@ update `GO_SERVICE_URL` in `extension/src/background.ts` and the matching
 POST /analyze
 {"title": "...", "company": "...", "text": "..."}
 
--> {"score": 0-100, "reasoning": "..."}
+-> {"score": 0-100, "strengths": ["..."], "gaps": ["..."], "reasoning": "..."}
 ```
 
 On a safety-classifier refusal (`stop_reason: "refusal"`), responds with

@@ -11,7 +11,9 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 )
 
-const defaultModel = anthropic.ModelClaudeOpus5
+// Scoring is a simple, well-defined classification task (not open-ended
+// reasoning), so a smaller/cheaper model is a better fit than Opus here.
+const defaultModel = anthropic.ModelClaudeHaiku4_5
 
 // scoreSchema constrains the model's response via output_config.format, so
 // the returned text is guaranteed to be valid JSON matching this shape —
@@ -118,8 +120,8 @@ func (s *scorer) score(ctx context.Context, req analyzeRequest) (analyzeResponse
 	resp, err := s.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     s.model,
 		MaxTokens: 4096,
+		// Effort is an Opus-only knob — Haiku doesn't accept it (400s if set).
 		OutputConfig: anthropic.OutputConfigParam{
-			Effort: anthropic.OutputConfigEffortMedium,
 			Format: anthropic.JSONOutputFormatParam{Schema: scoreSchema},
 		},
 		Messages: []anthropic.MessageParam{
