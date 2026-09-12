@@ -12,6 +12,10 @@ function escapeHtml(s: string): string {
   return div.innerHTML;
 }
 
+function byScoreDesc(results: JobResult[]): JobResult[] {
+  return [...results].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+}
+
 function renderState(state: RunState): void {
   const statusEl = document.getElementById('status')!;
   statusEl.textContent = `Status: ${state.status} — ${state.results.length} processed (index ${state.currentIndex})`;
@@ -26,8 +30,7 @@ function renderState(state: RunState): void {
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
-  const sorted = [...state.results].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
-  for (const r of sorted) {
+  for (const r of byScoreDesc(state.results)) {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td>${r.score ?? '—'}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.company)}</td>`;
     tbody.appendChild(tr);
@@ -91,12 +94,12 @@ document.getElementById('stop')!.addEventListener('click', async () => {
 
 document.getElementById('exportCsv')!.addEventListener('click', async () => {
   const res = await send({ type: 'GET_STATE' });
-  if (res.ok && res.data) download('job-matches.csv', 'text/csv', toCsv((res.data as RunState).results));
+  if (res.ok && res.data) download('job-matches.csv', 'text/csv', toCsv(byScoreDesc((res.data as RunState).results)));
 });
 
 document.getElementById('exportJson')!.addEventListener('click', async () => {
   const res = await send({ type: 'GET_STATE' });
-  if (res.ok && res.data) download('job-matches.json', 'application/json', toExportJson((res.data as RunState).results));
+  if (res.ok && res.data) download('job-matches.json', 'application/json', toExportJson(byScoreDesc((res.data as RunState).results)));
 });
 
 document.getElementById('clear')!.addEventListener('click', async () => {
