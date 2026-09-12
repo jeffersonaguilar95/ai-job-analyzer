@@ -10,7 +10,8 @@
     button { flex: 1; padding: 6px 10px; cursor: pointer; font-size: 12px; }
     #stop { background: #d9342b; color: #fff; border: none; border-radius: 4px; }
     #start { border-radius: 4px; }
-    #status { font-size: 12px; color: #555; margin-bottom: 8px; min-height: 16px; }
+    #status { font-size: 12px; font-weight: 600; margin-bottom: 2px; min-height: 16px; }
+    #stats { font-size: 11px; color: #777; margin-bottom: 8px; min-height: 14px; }
     #error { font-size: 11px; color: #d9342b; margin-bottom: 8px; }
     table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 8px; }
     th, td { text-align: left; padding: 3px 4px; border-bottom: 1px solid #eee; }
@@ -31,6 +32,7 @@
 <body>
   <h1>AI Job Analyzer</h1>
   <div id="status">Status: idle</div>
+  <div id="stats"></div>
   <div id="error"></div>
   <div class="row">
     <button id="start">Start</button>

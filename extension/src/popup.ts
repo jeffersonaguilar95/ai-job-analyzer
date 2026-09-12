@@ -18,11 +18,16 @@ function byScoreDesc(results: JobResult[]): JobResult[] {
 
 function renderState(state: RunState): void {
   const statusEl = document.getElementById('status')!;
-  const pageProgress =
-    state.currentPageCount !== null ? `${Math.min(state.currentIndex, state.currentPageCount)}/${state.currentPageCount}` : '—';
-  statusEl.textContent =
-    `Status: ${state.status} — page ${pageProgress} — ${state.pagesCompleted} page(s) completed — ` +
-    `${state.results.length} unique — ${state.duplicates.length} duplicates skipped`;
+  statusEl.textContent = `Status: ${state.status}`;
+
+  const stats = [];
+  if (state.currentPageCount !== null) {
+    stats.push(`page ${Math.min(state.currentIndex, state.currentPageCount)}/${state.currentPageCount}`);
+  }
+  stats.push(`${state.pagesCompleted} page(s) completed`);
+  stats.push(`${state.results.length} unique`);
+  stats.push(`${state.duplicates.length} duplicates skipped`);
+  document.getElementById('stats')!.textContent = stats.join(' · ');
 
   const errorEl = document.getElementById('error')!;
   errorEl.textContent = state.error ?? '';
