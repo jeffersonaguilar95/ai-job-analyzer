@@ -7,6 +7,10 @@ export interface RunState {
   tabId: number | null;
   adapterId: string | null;
   currentIndex: number;
+  /** Total cards found on the page currently being processed, or null before the first count. */
+  currentPageCount: number | null;
+  /** How many pages have finished processing (incremented on natural completion, not Stop). */
+  pagesCompleted: number;
   results: JobResult[];
   error: string | null;
   updatedAt: string;
@@ -20,6 +24,8 @@ function initialState(): RunState {
     tabId: null,
     adapterId: null,
     currentIndex: 0,
+    currentPageCount: null,
+    pagesCompleted: 0,
     results: [],
     error: null,
     updatedAt: new Date().toISOString(),

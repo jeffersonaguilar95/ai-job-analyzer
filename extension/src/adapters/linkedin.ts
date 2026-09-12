@@ -12,6 +12,10 @@ import type { SiteAdapter } from './types';
  */
 const CARD_SELECTOR = 'div[role="button"][componentkey^="job-card-component-ref-"]';
 
+function jobIdExprFor(cardExpr: string): string {
+  return `(${cardExpr}?.getAttribute('componentkey') || '').replace('job-card-component-ref-', '')`;
+}
+
 function rectExprFor(elementExpr: string): string {
   return `(() => {
     const el = ${elementExpr};
@@ -34,6 +38,10 @@ export const linkedinAdapter: SiteAdapter = {
   },
 
   countCardsExpr: `document.querySelectorAll('${CARD_SELECTOR}').length`,
+
+  // Read straight off the card, without scrolling/clicking, so already-seen
+  // postings can be skipped before paying for a scroll+click+LLM call.
+  cardIdExpr: (index) => `${jobIdExprFor(`document.querySelectorAll('${CARD_SELECTOR}')[${index}]`)} || null`,
 
   cardRectExpr: (index) => rectExprFor(`document.querySelectorAll('${CARD_SELECTOR}')[${index}]`),
 
@@ -76,14 +84,14 @@ export const linkedinAdapter: SiteAdapter = {
   // empty on a posting you know lists a range.
   extractExpr: (index) => `(() => {
     const card = document.querySelectorAll('${CARD_SELECTOR}')[${index}];
-    if (!card) return { title: '', company: '', location: '', salary: '', url: location.href, text: '' };
+    if (!card) return { jobId: '', title: '', company: '', location: '', salary: '', url: location.href, text: '' };
     const paragraphs = [...card.querySelectorAll('p')];
     const titleSpan = card.querySelector('p span[aria-hidden="true"]');
     const title = titleSpan ? titleSpan.textContent.trim() : (paragraphs[0]?.innerText.trim() ?? '');
     const company = paragraphs[1] ? paragraphs[1].innerText.trim() : '';
     const location = paragraphs[2] ? paragraphs[2].innerText.trim() : '';
 
-    const jobId = (card.getAttribute('componentkey') || '').replace('job-card-component-ref-', '');
+    const jobId = ${jobIdExprFor('card')};
     const url = jobId ? \`https://www.linkedin.com/jobs/view/\${jobId}/\` : location.href;
 
     const panels = document.querySelectorAll('[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]');
@@ -97,6 +105,6 @@ export const linkedinAdapter: SiteAdapter = {
       : [];
     const salary = pillTexts.find((t) => /[$€£]|\\/yr|\\/hr|per year|per hour/i.test(t)) ?? '';
 
-    return { title, company, location, salary, url, text };
+    return { jobId, title, company, location, salary, url, text };
   })()`,
 };

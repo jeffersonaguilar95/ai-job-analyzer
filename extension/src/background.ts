@@ -69,6 +69,7 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
   await sleep(adapter.timings.afterClickMs);
 
   const extracted = await evaluate<{
+    jobId: string;
     title: string;
     company: string;
     location: string;
@@ -81,6 +82,7 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
 
   return {
     index,
+    jobId: extracted.jobId,
     title: extracted.title,
     company: extracted.company,
     location: extracted.location,
@@ -101,16 +103,24 @@ async function runLoop(tabId: number, adapter: SiteAdapter): Promise<void> {
     if (state.status !== 'running') break; // Stop requested: nothing already processed is lost
 
     const count = await evaluate<number>(tabId, adapter.countCardsExpr);
+    await setState({ currentPageCount: count });
     if (state.currentIndex >= count) {
-      await setState({ status: 'done' });
+      await setState({ status: 'done', pagesCompleted: state.pagesCompleted + 1 });
       break;
     }
 
-    try {
-      const result = await processCard(tabId, adapter, state.currentIndex);
-      if (result) await appendResult(result);
-    } catch (err) {
-      console.error('[ai-job-analyzer] Error processing card', state.currentIndex, err);
+    const jobId = await evaluate<string | null>(tabId, adapter.cardIdExpr(state.currentIndex));
+    const alreadyScored = jobId !== null && state.results.some((r) => r.jobId === jobId);
+
+    if (alreadyScored) {
+      console.log('[ai-job-analyzer] Skipping already-scored job', jobId);
+    } else {
+      try {
+        const result = await processCard(tabId, adapter, state.currentIndex);
+        if (result) await appendResult(result);
+      } catch (err) {
+        console.error('[ai-job-analyzer] Error processing card', state.currentIndex, err);
+      }
     }
 
     await setState({ currentIndex: state.currentIndex + 1 });

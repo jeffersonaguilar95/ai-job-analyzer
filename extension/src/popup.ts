@@ -18,7 +18,11 @@ function byScoreDesc(results: JobResult[]): JobResult[] {
 
 function renderState(state: RunState): void {
   const statusEl = document.getElementById('status')!;
-  statusEl.textContent = `Status: ${state.status} — ${state.results.length} processed (index ${state.currentIndex})`;
+  const pageProgress =
+    state.currentPageCount !== null ? `${Math.min(state.currentIndex, state.currentPageCount)}/${state.currentPageCount}` : '—';
+  statusEl.textContent =
+    `Status: ${state.status} — page ${pageProgress} — ` +
+    `${state.pagesCompleted} page(s) completed — ${state.results.length} scored total`;
 
   const errorEl = document.getElementById('error')!;
   errorEl.textContent = state.error ?? '';
