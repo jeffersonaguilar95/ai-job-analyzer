@@ -65,9 +65,18 @@ export const linkedinAdapter: SiteAdapter = {
   // stale ones left in the DOM from earlier cards) so it doesn't cross into
   // the sibling "About the company" section, which has its own
   // `expandable-text-box`.
+  //
+  // Salary (when published) is read from the detail panel's row of "job
+  // criteria" pills (the same row as "Remote"/"Full-time"): each pill is an
+  // anchor pointing to /jobs/search-results/?currentJobId=..., and one of
+  // them holds the pay range when the poster included it. Matched by
+  // currency/period pattern rather than position, since the pill only
+  // appears at all when a salary was published — UNVERIFIED against a real
+  // posting with salary listed; recalibrate against one if it comes back
+  // empty on a posting you know lists a range.
   extractExpr: (index) => `(() => {
     const card = document.querySelectorAll('${CARD_SELECTOR}')[${index}];
-    if (!card) return { title: '', company: '', location: '', url: location.href, text: '' };
+    if (!card) return { title: '', company: '', location: '', salary: '', url: location.href, text: '' };
     const paragraphs = [...card.querySelectorAll('p')];
     const titleSpan = card.querySelector('p span[aria-hidden="true"]');
     const title = titleSpan ? titleSpan.textContent.trim() : (paragraphs[0]?.innerText.trim() ?? '');
@@ -83,6 +92,11 @@ export const linkedinAdapter: SiteAdapter = {
     const descEl = aboutJob ? aboutJob.querySelector('span[data-testid="expandable-text-box"]') : null;
     const text = descEl ? descEl.innerText.trim() : '';
 
-    return { title, company, location, url, text };
+    const pillTexts = panel
+      ? [...panel.querySelectorAll('a[href*="/jobs/search-results/"] span')].map((el) => el.textContent.trim())
+      : [];
+    const salary = pillTexts.find((t) => /[$€£]|\\/yr|\\/hr|per year|per hour/i.test(t)) ?? '';
+
+    return { title, company, location, salary, url, text };
   })()`,
 };

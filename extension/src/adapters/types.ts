@@ -3,6 +3,7 @@ export interface JobResult {
   title: string;
   company: string;
   location: string;
+  salary: string;
   url: string;
   text: string;
   score: number | null;

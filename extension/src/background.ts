@@ -68,10 +68,14 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
   await realClick(tabId, rect);
   await sleep(adapter.timings.afterClickMs);
 
-  const extracted = await evaluate<{ title: string; company: string; location: string; url: string; text: string }>(
-    tabId,
-    adapter.extractExpr(index),
-  );
+  const extracted = await evaluate<{
+    title: string;
+    company: string;
+    location: string;
+    salary: string;
+    url: string;
+    text: string;
+  }>(tabId, adapter.extractExpr(index));
 
   const { score, strengths, gaps, reasoning } = await analyzeWithGoService(extracted);
 
@@ -80,6 +84,7 @@ async function processCard(tabId: number, adapter: SiteAdapter, index: number): 
     title: extracted.title,
     company: extracted.company,
     location: extracted.location,
+    salary: extracted.salary,
     url: extracted.url,
     text: extracted.text,
     score,
