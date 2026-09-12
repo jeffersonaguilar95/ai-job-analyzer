@@ -34,7 +34,10 @@ function initialState(): RunState {
 
 export async function getState(): Promise<RunState> {
   const data = await chrome.storage.local.get(KEY);
-  return (data[KEY] as RunState | undefined) ?? initialState();
+  // Merge over defaults (not a plain fallback) so state persisted under an
+  // older schema — missing fields added since — comes back fully populated
+  // instead of leaving new fields undefined.
+  return { ...initialState(), ...(data[KEY] as Partial<RunState> | undefined) };
 }
 
 export async function setState(patch: Partial<RunState>): Promise<RunState> {
