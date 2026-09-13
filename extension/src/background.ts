@@ -165,23 +165,33 @@ async function runLoop(tabId: number, adapter: SiteAdapter, maxPagesPerBatch: nu
     await setState({ currentPageCount: count });
     if (state.currentIndex >= count) {
       pagesThisBatch++;
-      const pagesCompleted = state.pagesCompleted + 1;
 
       if (pagesThisBatch >= maxPagesPerBatch) {
         // Hit the batch cap with (likely) more pages left — stop without
         // advancing, so the next Start click can tell "click next first"
         // (batchLimitReached) apart from "genuinely done" (done).
-        await setState({ status: 'batchLimitReached', pagesCompleted });
+        //
+        // Re-checked against fresh state (not the `state` read at the top of
+        // this iteration): a Stop+Clear can land while goToNextPage/waits
+        // above were in flight, and blindly writing pagesCompleted computed
+        // from the stale snapshot would resurrect a counter Clear just reset.
+        const latest = await getState();
+        if (latest.status !== 'running') break;
+        await setState({ status: 'batchLimitReached', pagesCompleted: latest.pagesCompleted + 1 });
         break;
       }
 
       const advanced = await goToNextPage(tabId, adapter);
+
+      const latest = await getState();
+      if (latest.status !== 'running') break;
+
       if (!advanced) {
-        await setState({ status: 'done', pagesCompleted });
+        await setState({ status: 'done', pagesCompleted: latest.pagesCompleted + 1 });
         break;
       }
 
-      await setState({ pagesCompleted, currentIndex: 0, currentPageCount: null });
+      await setState({ pagesCompleted: latest.pagesCompleted + 1, currentIndex: 0, currentPageCount: null });
       continue;
     }
 
@@ -220,7 +230,11 @@ async function runLoop(tabId: number, adapter: SiteAdapter, maxPagesPerBatch: nu
       await setState({ currentJob: null });
     }
 
-    await setState({ currentIndex: state.currentIndex + 1 });
+    // Same staleness guard as above: processCard can take a while (a slow
+    // LLM call), long enough for a Stop+Clear to land mid-flight.
+    const latestAfterCard = await getState();
+    if (latestAfterCard.status !== 'running') break;
+    await setState({ currentIndex: latestAfterCard.currentIndex + 1 });
     await sleep(adapter.timings.betweenCardsMs);
   }
 
