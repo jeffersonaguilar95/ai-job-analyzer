@@ -17,45 +17,44 @@ import { rectExprFor } from './shared';
  * `history.back()` as its last step, once everything's already been read
  * off the detail page.
  *
- * CONFIRMED LIVE (not just a theoretical risk): the list actively re-sorts
- * by seen/not-seen as you visit jobs — going back doesn't just reshuffle
- * cosmetically, it reorganizes hard enough that "index N" never means the
- * same card twice in a row. Treating index as a stable position (the first
- * version of this file did) broke badly: `countCardsExpr`/`currentIndex`
- * desynced from the live list, `runLoop` misread a post-back reload as
- * having reached a new page, and pagination fired at the wrong times.
+ * REORDERING RULE (confirmed live by the user, precisely): viewing a job
+ * moves it to the FRONT of the list, ahead of everything else — it doesn't
+ * sink down or scatter randomly. So after viewing the cards originally at
+ * positions 0, 1, 2, ..., the already-viewed ones always end up clustered
+ * at the front, in the order they were viewed (most-recent first), pushing
+ * everything not-yet-viewed down but preserving ITS relative order. The
+ * practical consequence: position `currentIndex` (the same counter
+ * `background.ts::runLoop` already tracks per page) always lands on a
+ * not-yet-viewed job — no extra bookkeeping needed. An earlier version of
+ * this file tried tracking visited jobIds in `sessionStorage` and scanning
+ * for "first not visited" instead of trusting `index`, on the assumption
+ * that the reordering was unpredictable; it wasn't, and direct indexing is
+ * both correct here and simpler.
  *
- * Fix: this version never uses the `index` argument at all (every
- * `(_index)` param below is intentionally unused). Instead, each already
- * visited job is recorded by jobId in `sessionStorage` (same-origin, so it
- * survives both `history.back()` and pagination clicks within this tab),
- * and `cardRectExpr`/`cardPreviewExpr`/`countCardsExpr` all work off "is
- * there a not-yet-visited card visible right now", scanning the live DOM
- * fresh every time rather than trusting a position. This also means an
- * already-visited card is never clicked into in the first place, avoiding
- * the slow full navigate-there-and-back round trip that re-checking
- * duplicates via `background.ts`'s own jobId dedup would otherwise cost on
- * every single re-shuffle. That dedup (based on already-scored results,
- * not this sessionStorage set) remains the authoritative backstop — this
- * is purely a "don't bother clicking this one again" optimization.
+ * The part that DID break in earlier versions: `countCardsExpr` misjudging
+ * "how many cards are on this page" right after the `history.back()` above
+ * — if it read a real-but-still-partial render (e.g. only 2-3 of 10 cards
+ * re-rendered so far) as the *actual* page size, `currentIndex >= count`
+ * would fire early and `runLoop` would click "next page" mid-page. Mitigated
+ * by treating any suspiciously-low count as "still loading" (see
+ * countCardsExpr) and by a generous `betweenCardsMs` giving the page time
+ * to fully settle before the next card's count is even checked.
  *
  * A new tab per job (leaving the list tab untouched, sidestepping the
- * reshuffling entirely) was considered and rejected: only background.ts
- * can open tabs (`chrome.tabs.*`, not callable from a page-evaluated
+ * reordering entirely) was considered and rejected: only background.ts can
+ * open tabs (`chrome.tabs.*`, not callable from a page-evaluated
  * expression), which would mean teaching background.ts and the
  * `SiteAdapter` contract a new "detail opens in a new tab" mode — this
  * project's adapters are meant to stay pure data, no `background.ts`
  * changes required to add one.
  *
- * Calibrated (Sep 2026) from: the list page (10 cards + pagination nav)
- * and one job's detail page (Elastic / "Senior Software Engineer (SSC)"),
- * plus live behavior reports from an actual run. Not yet fully verified
+ * Calibrated (Sep 2026) from: the list page (10 cards + pagination nav),
+ * one job's detail page (Elastic / "Senior Software Engineer (SSC)"), and
+ * live behavior reports from an actual run. Not yet fully verified
  * end-to-end (particularly: whether the "next page" button ever actually
  * gets reached/disabled, given the list can keep resurfacing new unseen
  * jobs on page 1 rather than requiring pagination at all).
  */
-
-const VISITED_KEY = 'aiJobAnalyzerWtjVisitedJobs';
 
 // A plain `[data-testid^="job-card-"]` selector would also match the inner
 // tag pills (`job-card-tag-remote`, `job-card-tag-salary`, ...), which share
@@ -70,26 +69,11 @@ function titleLinkExprFor(cardExpr: string): string {
   return `(${cardExpr})?.querySelector('a[href*="/jobs/"]')`;
 }
 
-// jobId parsed from a card's own href (list page, pre-click) — same slug
-// extractExpr reads from location.href on the detail page after the click,
-// so a job marked visited there is recognized here without ever navigating.
-function cardJobIdExprFor(cardExpr: string): string {
-  return `(() => {
-    const href = (${titleLinkExprFor(cardExpr)})?.getAttribute('href') || '';
-    const m = href.match(/\\/jobs\\/([^/?#]+)/);
-    return m ? m[1] : '';
-  })()`;
+// Cards are addressed by plain position (see file header for why that's
+// safe here) — every use below is `(${ALL_CARDS_EXPR})[${index}]`.
+function cardAt(index: number | string): string {
+  return `(${ALL_CARDS_EXPR})[${index}]`;
 }
-
-const VISITED_SET_EXPR = `new Set(JSON.parse(sessionStorage.getItem('${VISITED_KEY}') || '[]'))`;
-
-// The one thing every other expression below builds on: scans the live
-// list fresh (never trusts a remembered position) and returns the first
-// card whose jobId isn't in the visited set, or undefined if none.
-const FIRST_UNVISITED_CARD_EXPR = `(() => {
-  const visited = ${VISITED_SET_EXPR};
-  return ${ALL_CARDS_EXPR}.find((card) => !visited.has(${cardJobIdExprFor('card')}));
-})()`;
 
 export const welcomeToTheJungleAdapter: SiteAdapter = {
   id: 'welcometothejungle',
@@ -98,37 +82,47 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
 
   // Generous relative to LinkedIn's: every card click is a full page
   // navigation (not an in-place panel update), and there's also the
-  // return-to-list navigation between cards to absorb (see file header).
+  // return-to-list navigation between cards to absorb (see file header) —
+  // betweenCardsMs in particular needs to comfortably outlast the list's
+  // full re-render after history.back(), since countCardsExpr's only
+  // defense against reading a still-loading partial render is treating an
+  // implausibly low count as "not ready yet" (see below).
   timings: {
     afterClickMs: 1500,
-    betweenCardsMs: 1800,
+    betweenCardsMs: 2500,
     scrollStepPx: 260,
     maxScrollAttempts: 12,
     maxDetailWaitAttempts: 8,
     maxPageLoadWaitAttempts: 8,
   },
 
-  // Deliberately not "the live card count" (see file header — index/count
-  // matching a reordering list is exactly what broke). Two states only:
-  // 0 cards rendered at all (still loading after a back-navigation) or a
-  // pagination boundary reports 0 too, since neither has an unvisited card
-  // to give cardRectExpr; any unvisited card present anywhere reports a
-  // large sentinel so runLoop keeps calling processCard instead of jumping
-  // to pagination. currentIndex itself is irrelevant here — nothing below
-  // reads it — so this only needs to stay above whatever currentIndex has
-  // counted up to so far this page.
-  countCardsExpr: `(${FIRST_UNVISITED_CARD_EXPR} ? 9999 : 0)`,
+  // The live card count, EXCEPT: a low-looking count is indistinguishable
+  // from "the list is still re-rendering after history.back() and only
+  // some cards have appeared so far" — reading that transient number as
+  // the real page size is exactly what made runLoop click "next page"
+  // mid-page in an earlier version. Since the page size observed while
+  // calibrating this adapter never dropped below 10 except possibly on a
+  // genuinely final results page, anything under 5 is treated as "still
+  // loading" (a large sentinel, so runLoop keeps calling processCard
+  // instead of jumping to pagination) rather than trusted as-is. A real
+  // final page with fewer than 5 results would be misjudged the same way
+  // and only resolved once cardRectExpr(index) starts returning null for
+  // out-of-range indices (an 'empty' outcome, harmless — see processCard).
+  countCardsExpr: `(() => {
+    const count = ${ALL_CARDS_EXPR}.length;
+    return count < 5 ? 999 : count;
+  })()`,
 
-  // Ignores `index` — always previews whichever card would actually get
-  // clicked next (see FIRST_UNVISITED_CARD_EXPR), so the popup's "currently
-  // processing" indicator reflects reality instead of a stale position.
-  cardPreviewExpr: (_index) => `(() => {
-    const card = ${FIRST_UNVISITED_CARD_EXPR};
+  // Best-effort only, for the popup's "currently processing" indicator —
+  // not authoritative (see extractExpr for why jobId there always wins).
+  cardPreviewExpr: (index) => `(() => {
+    const card = ${cardAt(index)};
     if (!card) return null;
     const titleLink = ${titleLinkExprFor('card')};
     if (!titleLink) return null;
+    const hrefMatch = (titleLink.getAttribute('href') || '').match(/\\/jobs\\/([^/?#]+)/);
     return {
-      jobId: ${cardJobIdExprFor('card')},
+      jobId: hrefMatch ? hrefMatch[1] : '',
       title: titleLink.textContent.trim(),
       company: titleLink.parentElement?.querySelector('p')?.textContent?.trim() ?? '',
     };
@@ -137,9 +131,8 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
   // Click the title link itself, not the card's outer wrapper — the
   // wrapper's "cursor-pointer" styling suggests a JS click handler on the
   // whole card, but clicking the real <a> guarantees an actual navigation
-  // regardless of how that's wired up. Ignores `index`, same reasoning as
-  // countCardsExpr/cardPreviewExpr.
-  cardRectExpr: (_index) => rectExprFor(titleLinkExprFor(FIRST_UNVISITED_CARD_EXPR)),
+  // regardless of how that's wired up.
+  cardRectExpr: (index) => rectExprFor(titleLinkExprFor(cardAt(index))),
 
   // Plain page, no dedicated scrollable list container observed — falls
   // back to scrollUntilVisible's own default click point.
@@ -168,10 +161,6 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
   // far — the hybrid/onsite keyword branches are an unverified guess by
   // analogy with the other adapters, not confirmed against a real
   // non-remote posting on this site.
-  //
-  // Also ignores `index` (see file header) — this runs against whatever
-  // job cardRectExpr's click just navigated to, identified entirely by
-  // location.href, not by any position.
   extractExpr: (_index) => `(() => {
     const jobUrl = location.href;
     const jobIdMatch = jobUrl.match(/\\/jobs\\/([^/?#]+)/);
@@ -198,18 +187,6 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
 
     const text = document.getElementById('the-position-section')?.innerText?.trim() ?? '';
 
-    // Record this jobId as visited (sessionStorage, same-origin — survives
-    // the history.back() below and any later pagination click) so the list
-    // page's FIRST_UNVISITED_CARD_EXPR skips it from now on, regardless of
-    // where the reordering puts it.
-    if (jobId) {
-      const visited = JSON.parse(sessionStorage.getItem('${VISITED_KEY}') || '[]');
-      if (!visited.includes(jobId)) {
-        visited.push(jobId);
-        sessionStorage.setItem('${VISITED_KEY}', JSON.stringify(visited));
-      }
-    }
-
     // Return to the list. jobUrl was captured above before this: location.href
     // reflects the new target as soon as a navigation is triggered, not the
     // page we're still extracting from.
@@ -220,9 +197,9 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
 
   // Confirmed disabled (not just hidden) at the start of the list ("Previous
   // Page" carries `disabled=""` on page 1) — assuming the same convention
-  // applies to "Next Page" at the end, not yet confirmed live. Note this
-  // may rarely get reached at all if the list keeps resurfacing unseen jobs
-  // on page 1 instead of requiring pagination — that's fine, it just means
-  // countCardsExpr keeps reporting work to do.
+  // applies to "Next Page" at the end, not yet confirmed live. May rarely
+  // get reached at all if the list keeps resurfacing unseen jobs on page 1
+  // instead of requiring pagination — that's fine, countCardsExpr just
+  // keeps reporting work to do.
   nextPageRectExpr: rectExprFor(`document.querySelector('button[data-testid="job-list-pagination-arrow-next"]:not([disabled])')`),
 };

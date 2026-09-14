@@ -127,12 +127,15 @@ card is a full navigation (same tab) to a separate job detail page, not a
 panel. Since only `background.ts` can open tabs (not something a
 page-evaluated expression can do) and this project's rule is that adapters
 never need `background.ts` changes, this adapter instead has `extractExpr`
-navigate back to the list itself (`history.back()`) as its last
-step, once everything's already been read off the detail page — see that
-file's header for the full reasoning, including the known trade-off (the
-list's order isn't stable across reloads, mitigated by the jobId dedup
-`processCard` already does for every adapter) and why a new-tab-per-job
-approach was considered and rejected.
+navigate back to the list itself (`history.back()`) as its last step, once
+everything's already been read off the detail page. The list also
+re-sorts on every view (viewing a job pulls it to the front, ahead of
+everything else) — confirmed live to follow that rule exactly, which is
+why the adapter can still safely click position `index` directly (already-
+viewed jobs always end up clustered at the front, so `index` always lands
+on a fresh one) instead of tracking visited jobIds itself. See that file's
+header for the full reasoning, including why a new-tab-per-job approach
+was considered and rejected.
 
 **State machine lives in `chrome.storage.local`**, not in memory, via
 `extension/src/lib/storage.ts` (`RunState`: status idle/running/paused/done/error,
@@ -185,20 +188,23 @@ call, and `finalizeScore` applies the same preference check to that answer.
 type, though the resolved type is still recorded on the result.
 
 `extension/src/adapters/welcometothejungle.ts` (targeting
-`www.welcometothejungle.com/en/jobs-matches`) went through a live-confirmed
-redesign, not just a calibration pass: a first version treated the list's
-card index as a stable position, which broke in an actual run — the site
-aggressively re-sorts by seen/not-seen as you visit jobs, so `countCardsExpr`
-and `currentIndex` desynced from the live DOM and pagination fired at the
-wrong times. The current version ignores `index` everywhere and instead
-tracks visited jobIds in `sessionStorage` (survives `history.back()` and
-pagination within the tab), always operating on "whichever card is first
-and not yet visited" — see that file's header for the full reasoning,
-including why a new-tab-per-job approach (which would sidestep the
-reordering entirely) was rejected in favor of staying within the existing
-`SiteAdapter` contract. Still unverified: whether
-`job-list-pagination-arrow-next` ever actually gets reached/disabled — the
-list may keep resurfacing unseen jobs on page 1 rather than requiring
-pagination at all — and the workplace-type keyword match only has a
-confirmed sample for "Fully-remote" (hybrid/onsite branches are an
-unverified guess by analogy with the other adapters).
+`www.welcometothejungle.com/en/jobs-matches`) went through two live-tested
+redesigns, not just a calibration pass. First problem: treating the list's
+card index as a stable position broke in an actual run, since the site
+re-sorts on every view. Second attempt tracked visited jobIds itself in
+`sessionStorage` and scanned for "first not visited" instead of trusting
+`index` — unnecessarily, it turned out: the user confirmed precisely how
+the re-sort works (viewing a job pulls it to the front, ahead of
+everything else, preserving relative order otherwise), which means
+`index` *is* safe to click directly after all, since already-viewed jobs
+always cluster at the front. The current version does exactly that and
+drops the `sessionStorage` tracking entirely. What actually needed fixing
+was `countCardsExpr` treating a still-loading partial render (right after
+`history.back()`) as the page's true size, firing pagination mid-page —
+now anything under 5 rendered cards is treated as "not settled yet" rather
+than trusted (see that file's header for why 5, and the trade-off if a
+real final page legitimately has fewer). Still unverified: whether
+`job-list-pagination-arrow-next` ever actually gets reached/disabled, and
+the workplace-type keyword match only has a confirmed sample for
+"Fully-remote" (hybrid/onsite branches are an unverified guess by analogy
+with the other adapters).
