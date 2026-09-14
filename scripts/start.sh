@@ -95,8 +95,7 @@ if [[ -n "$CHROME_BIN" ]]; then
   log "Launching Chrome with the extension pre-loaded (dedicated profile — your regular Chrome is untouched)..."
   "$CHROME_BIN" \
     --user-data-dir="$CHROME_PROFILE_DIR" \
-    --load-extension="$EXTENSION_DIR/dist" \
-    "https://www.linkedin.com/jobs/" &
+    --load-extension="$EXTENSION_DIR/dist" &
   wait $!
 else
   log "Chrome not found automatically — load extension/dist manually via chrome://extensions."
