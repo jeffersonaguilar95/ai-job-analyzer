@@ -1,7 +1,7 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
 import { getState, setState, resetState, appendResult, appendDuplicate, dedupeResults, getSettings } from './lib/storage';
 import { findAdapter } from './adapters/registry';
-import type { SiteAdapter, JobResult, WorkplaceType } from './adapters/types';
+import type { SiteAdapter, JobResult, WorkplaceType, WorkplacePreference } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
 
 /** URL of the local Go service (not implemented yet — see matching-service/). */
@@ -82,11 +82,12 @@ async function scrollUntilVisible(tabId: number, adapter: SiteAdapter, rectExpr:
   return rect;
 }
 
-const WORKPLACE_TYPE_LABEL: Record<WorkplaceType, string> = {
+const WORKPLACE_TYPE_LABEL: Record<WorkplaceType | 'any', string> = {
   remote: 'Remote',
   hybrid: 'Hybrid',
   onsite: 'On-site',
   unknown: 'Unknown',
+  any: 'Any',
 };
 
 type Analyzed = Pick<JobResult, 'score' | 'strengths' | 'gaps' | 'reasoning'> & { workplaceType: WorkplaceType };
@@ -98,15 +99,24 @@ type Finalized = Pick<JobResult, 'workplaceType' | 'discarded' | 'score' | 'stre
  * model's `analyzed.workplaceType` when the adapter reported 'unknown'. That
  * fallback comes from the very same scoring call already made (no separate
  * request), per the user's requirement not to add one just for this.
+ *
+ * `preference` is the user's Settings choice (see WorkplacePreference).
+ * 'any' means every posting passes through untouched, regardless of what
+ * the adapter/model determined — the workplaceType is still recorded on the
+ * result (useful in the export), just never used to discard anything.
  */
-function finalizeScore(domWorkplaceType: WorkplaceType | undefined, analyzed: Analyzed): Finalized {
+function finalizeScore(
+  domWorkplaceType: WorkplaceType | undefined,
+  analyzed: Analyzed,
+  preference: WorkplacePreference,
+): Finalized {
   // domWorkplaceType can be undefined for results stored before this field
   // existed (chrome.storage.local isn't migrated) — treat those as 'unknown'.
   const dom = domWorkplaceType ?? 'unknown';
   const workplaceType = dom !== 'unknown' ? dom : analyzed.workplaceType;
-  const isNonRemote = workplaceType === 'hybrid' || workplaceType === 'onsite';
+  const mismatch = preference !== 'any' && workplaceType !== 'unknown' && workplaceType !== preference;
 
-  if (!isNonRemote) {
+  if (!mismatch) {
     return {
       workplaceType,
       discarded: false,
@@ -124,7 +134,7 @@ function finalizeScore(domWorkplaceType: WorkplaceType | undefined, analyzed: An
     score: 0,
     strengths: [],
     gaps: [`Workplace type: ${WORKPLACE_TYPE_LABEL[workplaceType]}`],
-    reasoning: `Discarded — ${source} describes this job as ${WORKPLACE_TYPE_LABEL[workplaceType]}, not Remote.`,
+    reasoning: `Discarded — ${source} describes this job as ${WORKPLACE_TYPE_LABEL[workplaceType]}, not ${WORKPLACE_TYPE_LABEL[preference]}.`,
   };
 }
 
@@ -138,6 +148,7 @@ async function processCard(
   adapter: SiteAdapter,
   index: number,
   existingJobIds: ReadonlySet<string>,
+  preference: WorkplacePreference,
 ): Promise<ProcessOutcome> {
   const rect = await scrollUntilVisible(tabId, adapter, adapter.cardRectExpr(index));
   if (!rect) return { kind: 'empty' };
@@ -170,18 +181,21 @@ async function processCard(
     return { kind: 'duplicate', jobId: extracted.jobId, title: extracted.title, company: extracted.company };
   }
 
-  // Postings LinkedIn itself tags Hybrid/On-site slip through the search's
-  // "Remote" filter often enough to be worth filtering client-side, and
-  // skipping the (paid) LLM call for them entirely is the actual cost saved.
-  // Only 'unknown' goes to analyzeWithGoService, which also asks the model
-  // to read the workplace type off the posting text in that same call —
-  // finalizeScore then discards it too if that comes back Hybrid/On-site.
-  const isNonRemoteFromDom = extracted.workplaceType === 'hybrid' || extracted.workplaceType === 'onsite';
-  const analyzed: Analyzed = isNonRemoteFromDom
+  // LinkedIn's own workplace-type tag (e.g. postings its "Remote" filter
+  // still lets through as Hybrid/On-site) is enough on its own to know this
+  // posting won't match `preference` — skip the (paid) LLM call entirely in
+  // that case, which is the actual cost saved. Only when the DOM can't rule
+  // it out (matches preference, or is 'unknown') does it go to
+  // analyzeWithGoService, which also asks the model to read the workplace
+  // type off the posting text in that same call — finalizeScore applies the
+  // same preference check to that answer when the DOM said 'unknown'.
+  const domRulesOut =
+    preference !== 'any' && extracted.workplaceType !== 'unknown' && extracted.workplaceType !== preference;
+  const analyzed: Analyzed = domRulesOut
     ? { score: null, strengths: [], gaps: [], reasoning: null, workplaceType: extracted.workplaceType }
     : await analyzeWithGoService(extracted);
 
-  const finalized = finalizeScore(extracted.workplaceType, analyzed);
+  const finalized = finalizeScore(extracted.workplaceType, analyzed, preference);
 
   return {
     kind: 'scored',
@@ -221,7 +235,12 @@ async function goToNextPage(tabId: number, adapter: SiteAdapter): Promise<boolea
   return true;
 }
 
-async function runLoop(tabId: number, adapter: SiteAdapter, maxPagesPerBatch: number): Promise<void> {
+async function runLoop(
+  tabId: number,
+  adapter: SiteAdapter,
+  maxPagesPerBatch: number,
+  workplacePreference: WorkplacePreference,
+): Promise<void> {
   let pagesThisBatch = 0;
 
   while (true) {
@@ -278,7 +297,7 @@ async function runLoop(tabId: number, adapter: SiteAdapter, maxPagesPerBatch: nu
     const existingJobIds = new Set(state.results.map((r) => r.jobId));
 
     try {
-      const outcome = await processCard(tabId, adapter, state.currentIndex, existingJobIds);
+      const outcome = await processCard(tabId, adapter, state.currentIndex, existingJobIds, workplacePreference);
       if (outcome.kind === 'scored') {
         await appendResult(outcome.result);
       } else if (outcome.kind === 'duplicate') {
@@ -338,8 +357,8 @@ async function start(): Promise<ExtensionResponse> {
 
   await setState({ status: 'running', tabId: tab.id!, adapterId: adapter.id });
 
-  const { maxPagesPerBatch } = await getSettings();
-  runLoop(tab.id!, adapter, maxPagesPerBatch).catch(async (err) => {
+  const { maxPagesPerBatch, workplacePreference } = await getSettings();
+  runLoop(tab.id!, adapter, maxPagesPerBatch, workplacePreference).catch(async (err) => {
     console.error('[ai-job-analyzer] runLoop failed:', err);
     await setState({ status: 'error', error: String(err) });
     await detach(tab.id!).catch(() => {});
@@ -392,13 +411,14 @@ async function rescoreNulls(): Promise<ExtensionResponse> {
   const current = await getState();
   if (current.status === 'running') return { ok: false, error: 'Stop the run before rescoring.' };
 
+  const { workplacePreference } = await getSettings();
   const candidates = current.results.filter((r) => r.score === null);
   const retryable = candidates.filter((r) => r.text);
   let rescored = 0;
 
   for (const r of retryable) {
     const analyzed = await analyzeWithGoService(r);
-    const finalized = finalizeScore(r.workplaceType, analyzed);
+    const finalized = finalizeScore(r.workplaceType, analyzed, workplacePreference);
     if (finalized.score !== null) rescored++;
 
     const latest = await getState();

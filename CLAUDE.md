@@ -139,14 +139,21 @@ alongside `AdapterTimings` (click/scroll delays) during live testing.
 Same caveat applies to `workplaceTypeExprFor` in that file: it assumes
 LinkedIn appends the workplace type in parentheses to the card's location
 text (e.g. `"Bogotá, Colombia (Hybrid)"`) — unverified against a live
-on-site/hybrid posting. Non-remote postings LinkedIn's own "Remote" filter
-still lets through are how this got prioritized: `background.ts` reads this
-field to skip the paid matching-service call entirely for Hybrid/On-site
-postings, recording them with `score: 0` (not `null`) and `discarded: true`
-instead. When the DOM reports `'unknown'`, the fallback isn't a second LLM
-call — `matching-service`'s existing scoring prompt/schema (`score.go`) also
-asks the model to read the workplace type off the posting text in that same
-request, and `finalizeScore` in `background.ts` applies the same discard
-logic to that answer. If the DOM reports `'unknown'` for a posting you know
+on-site/hybrid posting. If the DOM reports `'unknown'` for a posting you know
 isn't remote, recalibrate the parenthetical-text regex against the real DOM
-rather than relying on the LLM fallback alone.
+rather than relying on the LLM fallback described below.
+
+The workplace-type filter itself is a user setting (`Settings.workplacePreference`
+in `extension/src/lib/storage.ts`: `'remote' | 'hybrid' | 'onsite' | 'any'`,
+picked from the popup's "Workplace" dropdown, default `'remote'`) — not a
+hardcoded "must be remote" rule. `background.ts`'s `finalizeScore` compares
+the posting's resolved workplace type against that preference: a mismatch
+forces `score: 0` and `discarded: true` (instead of `null`, so it's
+distinguishable from a matching-service failure) without spending an LLM
+call, provided the LinkedIn DOM tag alone is enough to know it doesn't
+match. When the DOM says `'unknown'`, there's no second request for this —
+`matching-service`'s existing scoring prompt/schema (`score.go`) already
+asks the model to read the workplace type off the posting text in the same
+call, and `finalizeScore` applies the same preference check to that answer.
+`'any'` disables the filter entirely: nothing is ever discarded on workplace
+type, though the resolved type is still recorded on the result.

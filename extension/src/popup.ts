@@ -1,7 +1,11 @@
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
 import type { RunState } from './lib/storage';
 import { dedupeResults, getSettings, setSettings } from './lib/storage';
-import type { JobResult } from './adapters/types';
+import type { JobResult, WorkplacePreference } from './adapters/types';
+
+function isWorkplacePreference(v: string): v is WorkplacePreference {
+  return v === 'remote' || v === 'hybrid' || v === 'onsite' || v === 'any';
+}
 
 function send(message: ExtensionMessage): Promise<ExtensionResponse> {
   return chrome.runtime.sendMessage(message);
@@ -44,6 +48,7 @@ function renderState(state: RunState): void {
   (document.getElementById('dedupe') as HTMLButtonElement).disabled = isRunning;
   (document.getElementById('rescore') as HTMLButtonElement).disabled = isRunning;
   (document.getElementById('maxPages') as HTMLInputElement).disabled = isRunning;
+  (document.getElementById('workplacePreference') as HTMLSelectElement).disabled = isRunning;
 
   const tbody = document.querySelector('#results tbody')!;
   tbody.innerHTML = '';
@@ -189,9 +194,17 @@ document.getElementById('maxPages')!.addEventListener('change', async (e) => {
   (document.getElementById('maxPages') as HTMLInputElement).value = String(value);
 });
 
+document.getElementById('workplacePreference')!.addEventListener('change', async (e) => {
+  const raw = (e.target as HTMLSelectElement).value;
+  const value = isWorkplacePreference(raw) ? raw : 'remote';
+  await setSettings({ workplacePreference: value });
+  (document.getElementById('workplacePreference') as HTMLSelectElement).value = value;
+});
+
 async function loadSettings(): Promise<void> {
   const settings = await getSettings();
   (document.getElementById('maxPages') as HTMLInputElement).value = String(settings.maxPagesPerBatch);
+  (document.getElementById('workplacePreference') as HTMLSelectElement).value = settings.workplacePreference;
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {

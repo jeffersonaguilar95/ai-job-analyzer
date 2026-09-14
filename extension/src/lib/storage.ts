@@ -1,4 +1,4 @@
-import type { JobResult } from '../adapters/types';
+import type { JobResult, WorkplacePreference } from '../adapters/types';
 
 /**
  * 'batchLimitReached' means the page cap (see Settings) was hit with more
@@ -121,12 +121,14 @@ export function dedupeResults(results: JobResult[]): JobResult[] {
 export interface Settings {
   /** How many pages of results one Start click processes before stopping (clicking Start again continues with the next batch). */
   maxPagesPerBatch: number;
+  /** Workplace-type filter applied while scoring — 'any' disables it (see WorkplacePreference). Read once at Start, same as maxPagesPerBatch. */
+  workplacePreference: WorkplacePreference;
 }
 
 const SETTINGS_KEY = 'settings';
 
 function defaultSettings(): Settings {
-  return { maxPagesPerBatch: 5 };
+  return { maxPagesPerBatch: 5, workplacePreference: 'remote' };
 }
 
 export async function getSettings(): Promise<Settings> {

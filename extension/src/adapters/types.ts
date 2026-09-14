@@ -5,6 +5,9 @@
  */
 export type WorkplaceType = 'remote' | 'hybrid' | 'onsite' | 'unknown';
 
+/** The user-configured workplace-type filter (Settings). 'any' disables filtering entirely — nothing is ever discarded on workplace type. */
+export type WorkplacePreference = 'remote' | 'hybrid' | 'onsite' | 'any';
+
 export interface JobResult {
   /** Monotonic counter assigned on append (shared with DuplicateEntry) — the true processing order, unlike `index`, which resets per page. */
   seq: number;
