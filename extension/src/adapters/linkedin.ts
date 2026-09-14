@@ -1,4 +1,5 @@
 import type { SiteAdapter } from './types';
+import { rectExprFor } from './shared';
 
 /**
  * Selectors calibrated live against linkedin.com/jobs/collections (Sep 2026).
@@ -64,15 +65,6 @@ const PANEL_EXPR = `(() => {
   const panels = document.querySelectorAll('[data-sdui-screen="com.linkedin.sdui.flagshipnav.jobs.SemanticJobDetails"]');
   return panels[panels.length - 1] ?? null;
 })()`;
-
-function rectExprFor(elementExpr: string): string {
-  return `(() => {
-    const el = ${elementExpr};
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top, bottom: r.bottom, height: r.height };
-  })()`;
-}
 
 export const linkedinAdapter: SiteAdapter = {
   id: 'linkedin',

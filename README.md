@@ -143,4 +143,6 @@ See `matching-service/README.md` for the full API contract and optional env vars
 - [x] `matching-service` in Go: CV PDF (native document input) + Claude API
       call with structured JSON output.
 - [ ] Live calibration of selectors/timings against real LinkedIn pages.
+- [x] Second adapter (Welcome to the Jungle / Otta) — selectors calibrated
+      from a pasted sample page, not yet verified live.
 - [ ] Adapters for other job boards (2-4h extra each).

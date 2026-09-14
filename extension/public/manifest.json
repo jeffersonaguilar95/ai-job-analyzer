@@ -6,6 +6,7 @@
   "permissions": ["debugger", "storage", "downloads"],
   "host_permissions": [
     "https://www.linkedin.com/*",
+    "https://app.welcometothejungle.com/*",
     "http://localhost:8787/*"
   ],
   "background": {

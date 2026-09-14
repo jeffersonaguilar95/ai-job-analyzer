@@ -106,7 +106,22 @@ strings (as text, evaluated via CDP) plus per-site timings — not a class
 hierarchy. `background.ts`'s loop only calls the `SiteAdapter` interface and
 has zero LinkedIn-specific knowledge. To support a new portal, add one file
 under `extension/src/adapters/` and register it in `registry.ts`; do not
-touch `background.ts`.
+touch `background.ts`. `extension/src/adapters/shared.ts` holds the one
+genuinely site-agnostic helper (`rectExprFor`) — reuse it instead of copying
+LinkedIn's version when writing a new adapter.
+
+New adapters are written the same way LinkedIn's was: the user pastes real
+HTML from the target site (search-results page, detail view, pagination
+control), and the selectors/logic are derived from that sample rather than
+a live browsing session — so, like LinkedIn's, they're calibrated against a
+single snapshot and should be treated as placeholders until confirmed with
+a real run (see below). Not every job board is a LinkedIn-style list of
+cards, either — `extension/src/adapters/welcometothejungle.ts` (Otta under
+the hood) is a "one job at a time" swipe view with a `next-button` instead
+of a card list, modeled as a page that always has exactly one card
+(`countCardsExpr` is 0 or 1) and whose "next job" button plays the role of
+`nextPageRectExpr`. No changes to the `SiteAdapter` contract or
+`background.ts` were needed to support that shape.
 
 **State machine lives in `chrome.storage.local`**, not in memory, via
 `extension/src/lib/storage.ts` (`RunState`: status idle/running/paused/done/error,
@@ -157,3 +172,13 @@ asks the model to read the workplace type off the posting text in the same
 call, and `finalizeScore` applies the same preference check to that answer.
 `'any'` disables the filter entirely: nothing is ever discarded on workplace
 type, though the resolved type is still recorded on the result.
+
+`extension/src/adapters/welcometothejungle.ts` is calibrated from a single
+pasted job page (Sep 2026), not a live run — same placeholder status as
+LinkedIn's selectors. Specifically unverified: what `next-button` does at
+the end of the job queue (gets `disabled`? disappears? no-ops on click?) —
+`nextPageRectExpr` assumes `:not([disabled])`; if pagination doesn't stop
+cleanly at the last job, recalibrate that selector against the real
+end-of-queue DOM. The workplace-type keyword match (`remote`/`hybrid`/
+`onsite` substrings in the location text) is also unverified against a real
+non-remote posting on this site.
