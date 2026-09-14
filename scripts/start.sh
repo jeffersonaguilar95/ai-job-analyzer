@@ -91,7 +91,35 @@ if [[ -z "$CHROME_BIN" ]]; then
   done
 fi
 
+# Ctrl+C (or closing the window) kills Chrome uncleanly — this script never
+# lets it shut down gracefully — which marks the profile's exit_type as
+# "Crashed". On the next launch, that alone makes Chrome auto-restore
+# whatever tabs were open last time (regardless of the "on startup" setting),
+# which is exactly the stale-tab-reopening behavior this resets before every
+# launch. Cookies/localStorage/login state live in separate files and are
+# untouched — only this one flag (plus forcing "open a blank tab" on
+# startup, for the same reason) changes.
+reset_chrome_session_state() {
+  local prefs_file="$CHROME_PROFILE_DIR/Default/Preferences"
+  [[ -f "$prefs_file" ]] || return 0
+  command -v python3 >/dev/null 2>&1 || {
+    log "python3 not found — skipping Chrome session-restore reset; it may reopen tabs from the last run."
+    return 0
+  }
+  python3 - "$prefs_file" <<'PYEOF'
+import json, sys
+path = sys.argv[1]
+with open(path) as f:
+    data = json.load(f)
+data.setdefault("profile", {})["exit_type"] = "Normal"
+data.setdefault("session", {})["restore_on_startup"] = 5
+with open(path, "w") as f:
+    json.dump(data, f)
+PYEOF
+}
+
 if [[ -n "$CHROME_BIN" ]]; then
+  reset_chrome_session_state
   log "Launching Chrome with the extension pre-loaded (dedicated profile — your regular Chrome is untouched)..."
   "$CHROME_BIN" \
     --user-data-dir="$CHROME_PROFILE_DIR" \
