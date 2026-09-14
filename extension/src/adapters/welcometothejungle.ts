@@ -10,10 +10,18 @@ import { rectExprFor } from './shared';
  * treated as a "page" with exactly one card (`countCardsExpr` is always 0 or
  * 1), and the "next job" button plays the role of `nextPageRectExpr`.
  *
- * Calibrated from a single pasted job page (Sep 2026, /jobs/rDS-sovw) — not
- * yet verified live. In particular, what `next-button` does at the end of
- * the queue (disable? disappear? no-op?) is UNVERIFIED; recalibrate
- * `nextPageRectExpr` once that's been observed in a real run.
+ * Calibrated from pasted samples (Sep 2026): one job page (/jobs/rDS-sovw)
+ * and the end-of-queue interstitial. Confirmed: at the end of the queue,
+ * `next-button` doesn't disable or disappear — clicking it on the last job
+ * navigates to a "Great progress! You've seen another set of matches"
+ * screen with a "See more jobs" button instead of another job. That screen
+ * has neither `[data-testid="job-card-main"]` nor
+ * `button[data-testid="next-button"]`, so `countCardsExpr` and
+ * `nextPageRectExpr` both naturally resolve to "nothing here" once on it —
+ * `runLoop`/`goToNextPage` already treat that as "no next page" and stop
+ * cleanly (`status: 'done'`), no special-casing needed. "See more jobs" is
+ * deliberately not clicked — reaching this screen is the intended stopping
+ * point, not something to page past.
  */
 
 const JOB_CARD_EXPR = `document.querySelector('[data-testid="job-card-main"]')`;
@@ -126,8 +134,8 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
     return { jobId, title, company, location: locationText, salary, url: location.href, text, workplaceType };
   })()`,
 
-  // UNVERIFIED: what happens to this button at the end of the queue (gets
-  // `disabled`, disappears, or something else) hasn't been observed yet —
-  // recalibrate this once you reach the last job in a real run.
+  // Confirmed absent (not just hidden/disabled) on the end-of-queue
+  // interstitial (see file header) — resolves to null there, which is what
+  // makes goToNextPage stop the run cleanly.
   nextPageRectExpr: rectExprFor(`document.querySelector('button[data-testid="next-button"]:not([disabled])')`),
 };

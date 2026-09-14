@@ -173,12 +173,13 @@ call, and `finalizeScore` applies the same preference check to that answer.
 `'any'` disables the filter entirely: nothing is ever discarded on workplace
 type, though the resolved type is still recorded on the result.
 
-`extension/src/adapters/welcometothejungle.ts` is calibrated from a single
-pasted job page (Sep 2026), not a live run — same placeholder status as
-LinkedIn's selectors. Specifically unverified: what `next-button` does at
-the end of the job queue (gets `disabled`? disappears? no-ops on click?) —
-`nextPageRectExpr` assumes `:not([disabled])`; if pagination doesn't stop
-cleanly at the last job, recalibrate that selector against the real
-end-of-queue DOM. The workplace-type keyword match (`remote`/`hybrid`/
-`onsite` substrings in the location text) is also unverified against a real
-non-remote posting on this site.
+`extension/src/adapters/welcometothejungle.ts` is calibrated from pasted
+samples (Sep 2026), not a live run — same placeholder status as LinkedIn's
+selectors, still to confirm end-to-end. What happens at the end of the job
+queue is confirmed, though: the last job's `next-button` navigates to a
+"Great progress!" interstitial with neither `job-card-main` nor
+`next-button`, which `countCardsExpr`/`nextPageRectExpr` already read as
+"nothing here" — the run stops cleanly there with no special-casing needed.
+The workplace-type keyword match (`remote`/`hybrid`/`onsite` substrings in
+the location text) is still unverified against a real non-remote posting on
+this site.
