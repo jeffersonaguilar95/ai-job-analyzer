@@ -185,15 +185,20 @@ call, and `finalizeScore` applies the same preference check to that answer.
 type, though the resolved type is still recorded on the result.
 
 `extension/src/adapters/welcometothejungle.ts` (targeting
-`www.welcometothejungle.com/en/jobs-matches`) is calibrated from pasted
-samples (Sep 2026) — the list page and one job's detail page — not a live
-run; same placeholder status as LinkedIn's selectors. Specifically
-unverified: whether `job-list-pagination-arrow-next` actually gets
-`disabled=""` at the end of pagination (only the *previous*-page button was
-observed disabled, on page 1); the `countCardsExpr` fallback of `10` while
-mid-navigation-back is a guess tied to the one page size seen; and the
-workplace-type keyword match only has a confirmed sample for "Fully-remote"
-— the hybrid/onsite branches are unverified by analogy with the other
-adapters. See that file's header for the (accepted, documented) list-order
-instability this adapter works around via jobId dedup rather than a new
-tab per job.
+`www.welcometothejungle.com/en/jobs-matches`) went through a live-confirmed
+redesign, not just a calibration pass: a first version treated the list's
+card index as a stable position, which broke in an actual run — the site
+aggressively re-sorts by seen/not-seen as you visit jobs, so `countCardsExpr`
+and `currentIndex` desynced from the live DOM and pagination fired at the
+wrong times. The current version ignores `index` everywhere and instead
+tracks visited jobIds in `sessionStorage` (survives `history.back()` and
+pagination within the tab), always operating on "whichever card is first
+and not yet visited" — see that file's header for the full reasoning,
+including why a new-tab-per-job approach (which would sidestep the
+reordering entirely) was rejected in favor of staying within the existing
+`SiteAdapter` contract. Still unverified: whether
+`job-list-pagination-arrow-next` ever actually gets reached/disabled — the
+list may keep resurfacing unseen jobs on page 1 rather than requiring
+pagination at all — and the workplace-type keyword match only has a
+confirmed sample for "Fully-remote" (hybrid/onsite branches are an
+unverified guess by analogy with the other adapters).
