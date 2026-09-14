@@ -118,13 +118,21 @@ single snapshot and should be treated as placeholders until confirmed with
 a real run (see below). Run `/add-portal` (`.claude/commands/add-portal.md`)
 to drive this end to end — it asks for the URL/HTML it needs, writes the
 adapter file, registers it, updates `manifest.json`'s `host_permissions` if
-needed, and documents whatever it couldn't verify without a live browser. Not every job board is a LinkedIn-style list of
-cards, either — `extension/src/adapters/welcometothejungle.ts` (Otta under
-the hood) is a "one job at a time" swipe view with a `next-button` instead
-of a card list, modeled as a page that always has exactly one card
-(`countCardsExpr` is 0 or 1) and whose "next job" button plays the role of
-`nextPageRectExpr`. No changes to the `SiteAdapter` contract or
-`background.ts` were needed to support that shape.
+needed, and documents whatever it couldn't verify without a live browser.
+
+Not every job board fits LinkedIn's "click opens an in-page panel" model,
+either. `extension/src/adapters/welcometothejungle.ts` targets
+`www.welcometothejungle.com/en/jobs-matches`, a card grid where clicking a
+card is a full navigation (same tab) to a separate job detail page, not a
+panel. Since only `background.ts` can open tabs (not something a
+page-evaluated expression can do) and this project's rule is that adapters
+never need `background.ts` changes, this adapter instead has `extractExpr`
+navigate back to the list itself (`history.back()`) as its last
+step, once everything's already been read off the detail page — see that
+file's header for the full reasoning, including the known trade-off (the
+list's order isn't stable across reloads, mitigated by the jobId dedup
+`processCard` already does for every adapter) and why a new-tab-per-job
+approach was considered and rejected.
 
 **State machine lives in `chrome.storage.local`**, not in memory, via
 `extension/src/lib/storage.ts` (`RunState`: status idle/running/paused/done/error,
@@ -176,13 +184,16 @@ call, and `finalizeScore` applies the same preference check to that answer.
 `'any'` disables the filter entirely: nothing is ever discarded on workplace
 type, though the resolved type is still recorded on the result.
 
-`extension/src/adapters/welcometothejungle.ts` is calibrated from pasted
-samples (Sep 2026), not a live run — same placeholder status as LinkedIn's
-selectors, still to confirm end-to-end. What happens at the end of the job
-queue is confirmed, though: the last job's `next-button` navigates to a
-"Great progress!" interstitial with neither `job-card-main` nor
-`next-button`, which `countCardsExpr`/`nextPageRectExpr` already read as
-"nothing here" — the run stops cleanly there with no special-casing needed.
-The workplace-type keyword match (`remote`/`hybrid`/`onsite` substrings in
-the location text) is still unverified against a real non-remote posting on
-this site.
+`extension/src/adapters/welcometothejungle.ts` (targeting
+`www.welcometothejungle.com/en/jobs-matches`) is calibrated from pasted
+samples (Sep 2026) — the list page and one job's detail page — not a live
+run; same placeholder status as LinkedIn's selectors. Specifically
+unverified: whether `job-list-pagination-arrow-next` actually gets
+`disabled=""` at the end of pagination (only the *previous*-page button was
+observed disabled, on page 1); the `countCardsExpr` fallback of `10` while
+mid-navigation-back is a guess tied to the one page size seen; and the
+workplace-type keyword match only has a confirmed sample for "Fully-remote"
+— the hybrid/onsite branches are unverified by analogy with the other
+adapters. See that file's header for the (accepted, documented) list-order
+instability this adapter works around via jobId dedup rather than a new
+tab per job.
