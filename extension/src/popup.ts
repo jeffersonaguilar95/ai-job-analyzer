@@ -88,7 +88,7 @@ function download(filename: string, mime: string, content: string): void {
 }
 
 function toCsv(results: JobResult[]): string {
-  const header = ['score', 'discarded', 'title', 'company', 'location', 'workplaceType', 'salary', 'url', 'strengths', 'gaps', 'reasoning'];
+  const header = ['score', 'title', 'company', 'location', 'workplaceType', 'salary', 'url', 'strengths', 'gaps', 'reasoning'];
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
   const joinPoints = (points: string[]) => points.map((p) => `- ${p}`).join('\n');
   const lines = [header.join(',')];
@@ -96,7 +96,6 @@ function toCsv(results: JobResult[]): string {
     lines.push(
       [
         escape(r.score ?? ''),
-        escape(r.discarded ? 'yes' : ''),
         escape(r.title),
         escape(r.company),
         escape(r.location),
@@ -112,10 +111,10 @@ function toCsv(results: JobResult[]): string {
   return lines.join('\n');
 }
 
-/** Export shape: same as JobResult minus `text` (the raw JD body), which is
- * redundant once you have the job's `url`. */
+/** Export shape: same as JobResult minus `text` (redundant once you have the
+ * job's `url`) and `discarded` (score 0 + reasoning already say that). */
 function toExportJson(results: JobResult[]): string {
-  const exportable = results.map(({ text: _text, ...rest }) => rest);
+  const exportable = results.map(({ text: _text, discarded: _discarded, ...rest }) => rest);
   return JSON.stringify(exportable, null, 2);
 }
 
