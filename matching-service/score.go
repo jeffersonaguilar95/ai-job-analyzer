@@ -42,8 +42,15 @@ var scoreSchema = map[string]any{
 			"type":        "string",
 			"description": "1-2 sentence overall summary of the fit, complementing strengths/gaps (don't repeat them verbatim).",
 		},
+		"workplaceType": map[string]any{
+			"type": "string",
+			"enum": []string{"remote", "hybrid", "onsite", "unknown"},
+			"description": "Work arrangement stated or clearly implied by the job posting text itself: 'remote' " +
+				"(fully remote), 'hybrid' (some in-office presence required), 'onsite' (in-person/on-site only), " +
+				"or 'unknown' if the text doesn't say.",
+		},
 	},
-	"required":             []string{"score", "strengths", "gaps", "reasoning"},
+	"required":             []string{"score", "strengths", "gaps", "reasoning", "workplaceType"},
 	"additionalProperties": false,
 }
 
@@ -71,17 +78,19 @@ type analyzeRequest struct {
 }
 
 type analyzeResponse struct {
-	Score     *int     `json:"score"`
-	Strengths []string `json:"strengths"`
-	Gaps      []string `json:"gaps"`
-	Reasoning string   `json:"reasoning"`
+	Score         *int     `json:"score"`
+	Strengths     []string `json:"strengths"`
+	Gaps          []string `json:"gaps"`
+	Reasoning     string   `json:"reasoning"`
+	WorkplaceType string   `json:"workplaceType"`
 }
 
 type scoreResult struct {
-	Score     int      `json:"score"`
-	Strengths []string `json:"strengths"`
-	Gaps      []string `json:"gaps"`
-	Reasoning string   `json:"reasoning"`
+	Score         int      `json:"score"`
+	Strengths     []string `json:"strengths"`
+	Gaps          []string `json:"gaps"`
+	Reasoning     string   `json:"reasoning"`
+	WorkplaceType string   `json:"workplaceType"`
 }
 
 func (s *scorer) handleAnalyze(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +122,7 @@ func (s *scorer) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 
 func (s *scorer) score(ctx context.Context, req analyzeRequest) (analyzeResponse, error) {
 	prompt := fmt.Sprintf(
-		"Job title: %s\nCompany: %s\n\nJob posting:\n%s\n\nCompare this job posting against the attached CV. Consider relevant experience, matching and missing technologies, and seniority fit. Return a score from 0 to 100, the specific strengths and gaps behind it, and a brief overall reasoning.",
+		"Job title: %s\nCompany: %s\n\nJob posting:\n%s\n\nCompare this job posting against the attached CV. Consider relevant experience, matching and missing technologies, and seniority fit. Return a score from 0 to 100, the specific strengths and gaps behind it, a brief overall reasoning, and the work arrangement (remote/hybrid/onsite/unknown) stated or implied by the posting text.",
 		req.Title, req.Company, req.Text,
 	)
 
@@ -146,7 +155,13 @@ func (s *scorer) score(ctx context.Context, req analyzeRequest) (analyzeResponse
 				return analyzeResponse{}, fmt.Errorf("failed to parse structured output: %w", err)
 			}
 			score := result.Score
-			return analyzeResponse{Score: &score, Strengths: result.Strengths, Gaps: result.Gaps, Reasoning: result.Reasoning}, nil
+			return analyzeResponse{
+				Score:         &score,
+				Strengths:     result.Strengths,
+				Gaps:          result.Gaps,
+				Reasoning:     result.Reasoning,
+				WorkplaceType: result.WorkplaceType,
+			}, nil
 		}
 	}
 

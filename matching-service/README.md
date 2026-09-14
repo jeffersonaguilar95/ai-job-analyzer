@@ -5,10 +5,11 @@ extension's `background.ts` at `POST http://localhost:8787/analyze`.
 
 Uses the official [`anthropic-sdk-go`](https://github.com/anthropics/anthropic-sdk-go)
 to send your CV (as a native PDF document block) plus the job posting text to
-Claude, constrained to a structured `{score, reasoning}` JSON output via
-`output_config.format` — no manual JSON parsing or prompt-based formatting
-tricks. No persistence: the CV is read once into memory at startup and never
-written to disk; job postings and responses aren't logged or stored anywhere.
+Claude, constrained to a structured `{score, reasoning, workplaceType, ...}`
+JSON output via `output_config.format` — no manual JSON parsing or
+prompt-based formatting tricks. No persistence: the CV is read once into
+memory at startup and never written to disk; job postings and responses
+aren't logged or stored anywhere.
 
 ## Setup
 
@@ -39,8 +40,21 @@ update `GO_SERVICE_URL` in `extension/src/background.ts` and the matching
 POST /analyze
 {"title": "...", "company": "...", "text": "..."}
 
--> {"score": 0-100, "strengths": ["..."], "gaps": ["..."], "reasoning": "..."}
+-> {
+     "score": 0-100,
+     "strengths": ["..."],
+     "gaps": ["..."],
+     "reasoning": "...",
+     "workplaceType": "remote" | "hybrid" | "onsite" | "unknown"
+   }
 ```
+
+`workplaceType` is the model's own read of the posting text, in the same
+call as the score — not something the extension asks for separately. The
+extension only consults it when its own DOM-based detection (off the
+LinkedIn card) came back `unknown`; if either signal says `hybrid`/`onsite`,
+`background.ts` forces `score: 0` and marks the result `discarded: true`
+instead of using the model's score.
 
 On a safety-classifier refusal (`stop_reason: "refusal"`), responds with
 `score: null` and a `reasoning` string explaining the request was declined —

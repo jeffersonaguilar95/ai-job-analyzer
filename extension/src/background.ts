@@ -13,9 +13,19 @@ async function getActiveTab(): Promise<chrome.tabs.Tab> {
   return tab;
 }
 
+function isWorkplaceType(v: unknown): v is WorkplaceType {
+  return v === 'remote' || v === 'hybrid' || v === 'onsite' || v === 'unknown';
+}
+
+/**
+ * `workplaceType` here is the model's own read of the posting text (same
+ * prompt/call as the score — no extra request), not the DOM-derived one
+ * from the adapter. Only meaningful as a fallback when the adapter couldn't
+ * tell (see finalizeScore).
+ */
 async function analyzeWithGoService(
   job: Pick<JobResult, 'title' | 'company' | 'text'>,
-): Promise<Pick<JobResult, 'score' | 'strengths' | 'gaps' | 'reasoning'>> {
+): Promise<Pick<JobResult, 'score' | 'strengths' | 'gaps' | 'reasoning'> & { workplaceType: WorkplaceType }> {
   try {
     const res = await fetch(GO_SERVICE_URL, {
       method: 'POST',
@@ -28,16 +38,18 @@ async function analyzeWithGoService(
       strengths?: string[];
       gaps?: string[];
       reasoning?: string;
+      workplaceType?: string;
     };
     return {
       score: data.score ?? null,
       strengths: data.strengths ?? [],
       gaps: data.gaps ?? [],
       reasoning: data.reasoning ?? null,
+      workplaceType: isWorkplaceType(data.workplaceType) ? data.workplaceType : 'unknown',
     };
   } catch (err) {
     console.warn('[ai-job-analyzer] Go service not available yet:', err);
-    return { score: null, strengths: [], gaps: [], reasoning: 'Matching service (Go) not available.' };
+    return { score: null, strengths: [], gaps: [], reasoning: 'Matching service (Go) not available.', workplaceType: 'unknown' };
   }
 }
 
@@ -76,6 +88,45 @@ const WORKPLACE_TYPE_LABEL: Record<WorkplaceType, string> = {
   onsite: 'On-site',
   unknown: 'Unknown',
 };
+
+type Analyzed = Pick<JobResult, 'score' | 'strengths' | 'gaps' | 'reasoning'> & { workplaceType: WorkplaceType };
+type Finalized = Pick<JobResult, 'workplaceType' | 'discarded' | 'score' | 'strengths' | 'gaps' | 'reasoning'>;
+
+/**
+ * `domWorkplaceType` (from the adapter, off the LinkedIn card) is trusted
+ * over the model's own read of the posting text — it only falls back to the
+ * model's `analyzed.workplaceType` when the adapter reported 'unknown'. That
+ * fallback comes from the very same scoring call already made (no separate
+ * request), per the user's requirement not to add one just for this.
+ */
+function finalizeScore(domWorkplaceType: WorkplaceType | undefined, analyzed: Analyzed): Finalized {
+  // domWorkplaceType can be undefined for results stored before this field
+  // existed (chrome.storage.local isn't migrated) — treat those as 'unknown'.
+  const dom = domWorkplaceType ?? 'unknown';
+  const workplaceType = dom !== 'unknown' ? dom : analyzed.workplaceType;
+  const isNonRemote = workplaceType === 'hybrid' || workplaceType === 'onsite';
+
+  if (!isNonRemote) {
+    return {
+      workplaceType,
+      discarded: false,
+      score: analyzed.score,
+      strengths: analyzed.strengths,
+      gaps: analyzed.gaps,
+      reasoning: analyzed.reasoning,
+    };
+  }
+
+  const source = dom !== 'unknown' ? 'LinkedIn' : 'the job posting text';
+  return {
+    workplaceType,
+    discarded: true,
+    score: 0,
+    strengths: [],
+    gaps: [`Workplace type: ${WORKPLACE_TYPE_LABEL[workplaceType]}`],
+    reasoning: `Discarded — ${source} describes this job as ${WORKPLACE_TYPE_LABEL[workplaceType]}, not Remote.`,
+  };
+}
 
 type ProcessOutcome =
   | { kind: 'empty' } // the card doesn't exist (yet, or anymore): end of the list
@@ -120,20 +171,17 @@ async function processCard(
   }
 
   // Postings LinkedIn itself tags Hybrid/On-site slip through the search's
-  // "Remote" filter often enough to be worth filtering client-side. Skipped
-  // before the (paid) LLM call, not after — this is the actual cost saved.
-  // 'unknown' still goes through normal scoring: an unrecognized DOM shape
-  // should never silently discard a posting that might be remote.
-  const isNonRemote = extracted.workplaceType === 'hybrid' || extracted.workplaceType === 'onsite';
-
-  const { score, strengths, gaps, reasoning } = isNonRemote
-    ? {
-        score: 0,
-        strengths: [],
-        gaps: [`Workplace type: ${WORKPLACE_TYPE_LABEL[extracted.workplaceType]}`],
-        reasoning: `Discarded — LinkedIn lists this job as ${WORKPLACE_TYPE_LABEL[extracted.workplaceType]}, not Remote.`,
-      }
+  // "Remote" filter often enough to be worth filtering client-side, and
+  // skipping the (paid) LLM call for them entirely is the actual cost saved.
+  // Only 'unknown' goes to analyzeWithGoService, which also asks the model
+  // to read the workplace type off the posting text in that same call —
+  // finalizeScore then discards it too if that comes back Hybrid/On-site.
+  const isNonRemoteFromDom = extracted.workplaceType === 'hybrid' || extracted.workplaceType === 'onsite';
+  const analyzed: Analyzed = isNonRemoteFromDom
+    ? { score: null, strengths: [], gaps: [], reasoning: null, workplaceType: extracted.workplaceType }
     : await analyzeWithGoService(extracted);
+
+  const finalized = finalizeScore(extracted.workplaceType, analyzed);
 
   return {
     kind: 'scored',
@@ -146,12 +194,7 @@ async function processCard(
       salary: extracted.salary,
       url: extracted.url,
       text: extracted.text,
-      workplaceType: extracted.workplaceType,
-      discarded: isNonRemote,
-      score,
-      strengths,
-      gaps,
-      reasoning,
+      ...finalized,
       scoredAt: new Date().toISOString(),
     },
   };
@@ -354,12 +397,13 @@ async function rescoreNulls(): Promise<ExtensionResponse> {
   let rescored = 0;
 
   for (const r of retryable) {
-    const { score, strengths, gaps, reasoning } = await analyzeWithGoService(r);
-    if (score !== null) rescored++;
+    const analyzed = await analyzeWithGoService(r);
+    const finalized = finalizeScore(r.workplaceType, analyzed);
+    if (finalized.score !== null) rescored++;
 
     const latest = await getState();
     const updated = latest.results.map((x) =>
-      x.seq === r.seq ? { ...x, score, strengths, gaps, reasoning, scoredAt: new Date().toISOString() } : x,
+      x.seq === r.seq ? { ...x, ...finalized, scoredAt: new Date().toISOString() } : x,
     );
     await setState({ results: updated });
   }

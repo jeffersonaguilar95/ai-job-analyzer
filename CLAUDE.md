@@ -141,7 +141,12 @@ LinkedIn appends the workplace type in parentheses to the card's location
 text (e.g. `"Bogotá, Colombia (Hybrid)"`) — unverified against a live
 on-site/hybrid posting. Non-remote postings LinkedIn's own "Remote" filter
 still lets through are how this got prioritized: `background.ts` reads this
-field to skip the paid matching-service call for Hybrid/On-site postings,
-recording them with `score: 0` (not `null`) and `discarded: true` instead —
-if it ever reports `'unknown'` for a posting you know isn't remote,
-recalibrate the parenthetical-text regex against the real DOM.
+field to skip the paid matching-service call entirely for Hybrid/On-site
+postings, recording them with `score: 0` (not `null`) and `discarded: true`
+instead. When the DOM reports `'unknown'`, the fallback isn't a second LLM
+call — `matching-service`'s existing scoring prompt/schema (`score.go`) also
+asks the model to read the workplace type off the posting text in that same
+request, and `finalizeScore` in `background.ts` applies the same discard
+logic to that answer. If the DOM reports `'unknown'` for a posting you know
+isn't remote, recalibrate the parenthetical-text regex against the real DOM
+rather than relying on the LLM fallback alone.
