@@ -203,8 +203,14 @@ was `countCardsExpr` treating a still-loading partial render (right after
 `history.back()`) as the page's true size, firing pagination mid-page —
 now anything under 5 rendered cards is treated as "not settled yet" rather
 than trusted (see that file's header for why 5, and the trade-off if a
-real final page legitimately has fewer). Still unverified: whether
-`job-list-pagination-arrow-next` ever actually gets reached/disabled, and
-the workplace-type keyword match only has a confirmed sample for
-"Fully-remote" (hybrid/onsite branches are an unverified guess by analogy
+real final page legitimately has fewer). `/en/jobs-matches` also turned out
+to have two separate sections — "New matches" and "Seen jobs" (a job moves
+from one to the other once viewed), each with its own pagination nav
+differing only by a `seen-` testid prefix — this adapter currently only
+paginates "Seen jobs" (`nextPageRectExpr`); "New matches" is an
+intentional, separate follow-up. Still unverified: whether
+`seen-job-list-pagination-arrow-next` ever actually gets reached/disabled
+at the end, and the workplace-type keyword match only has a confirmed
+sample for "Fully-remote" (hybrid/onsite branches are an unverified guess
+by analogy
 with the other adapters).

@@ -48,12 +48,16 @@ import { rectExprFor } from './shared';
  * project's adapters are meant to stay pure data, no `background.ts`
  * changes required to add one.
  *
+ * `/en/jobs-matches` actually has two sections: "New matches" and "Seen
+ * jobs" (a job moves from one to the other once viewed) — each with its
+ * own near-identical pagination nav, differing only by a `seen-` testid
+ * prefix. This adapter currently only paginates through "Seen jobs" (see
+ * `nextPageRectExpr`); "New matches" pagination is an intentional
+ * follow-up, not handled yet.
+ *
  * Calibrated (Sep 2026) from: the list page (10 cards + pagination nav),
  * one job's detail page (Elastic / "Senior Software Engineer (SSC)"), and
- * live behavior reports from an actual run. Not yet fully verified
- * end-to-end (particularly: whether the "next page" button ever actually
- * gets reached/disabled, given the list can keep resurfacing new unseen
- * jobs on page 1 rather than requiring pagination at all).
+ * live behavior reports from an actual run.
  */
 
 // A plain `[data-testid^="job-card-"]` selector would also match the inner
@@ -195,11 +199,18 @@ export const welcomeToTheJungleAdapter: SiteAdapter = {
     return { jobId, title, company, location: locationText, salary, url: jobUrl, text, workplaceType };
   })()`,
 
-  // Confirmed disabled (not just hidden) at the start of the list ("Previous
-  // Page" carries `disabled=""` on page 1) — assuming the same convention
-  // applies to "Next Page" at the end, not yet confirmed live. May rarely
-  // get reached at all if the list keeps resurfacing unseen jobs on page 1
-  // instead of requiring pagination — that's fine, countCardsExpr just
-  // keeps reporting work to do.
-  nextPageRectExpr: rectExprFor(`document.querySelector('button[data-testid="job-list-pagination-arrow-next"]:not([disabled])')`),
+  // `www.welcometothejungle.com/en/jobs-matches` actually has two separate
+  // sections, each with its own near-identical pagination nav (same CSS
+  // classes, different data-testid prefix): "New matches"
+  // (`job-list-pagination-arrow-next`) and "Seen jobs"
+  // (`seen-job-list-pagination-arrow-next`) — jobs move from one to the
+  // other as they're viewed. This adapter currently targets the "Seen"
+  // section's pagination specifically, per the user: that's the one this
+  // run is actually walking through today. "New matches" pagination is a
+  // deliberately separate follow-up, not handled here yet.
+  //
+  // Confirmed disabled (not just hidden) at the start of "Seen jobs"
+  // ("Previous Page" carries `disabled=""` on page 1) — assuming the same
+  // convention applies to "Next Page" at the end, not yet confirmed live.
+  nextPageRectExpr: rectExprFor(`document.querySelector('button[data-testid="seen-job-list-pagination-arrow-next"]:not([disabled])')`),
 };
