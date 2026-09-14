@@ -135,3 +135,13 @@ placeholders — LinkedIn's DOM changes often, and this project's own plan is
 to calibrate them live against a real search-results page before relying on
 them (see README roadmap). Don't treat them as settled; expect to adjust
 alongside `AdapterTimings` (click/scroll delays) during live testing.
+
+Same caveat applies to `workplaceTypeExprFor` in that file: it assumes
+LinkedIn appends the workplace type in parentheses to the card's location
+text (e.g. `"Bogotá, Colombia (Hybrid)"`) — unverified against a live
+on-site/hybrid posting. Non-remote postings LinkedIn's own "Remote" filter
+still lets through are how this got prioritized: `background.ts` reads this
+field to skip the paid matching-service call for Hybrid/On-site postings,
+recording them with `score: 0` (not `null`) and `discarded: true` instead —
+if it ever reports `'unknown'` for a posting you know isn't remote,
+recalibrate the parenthetical-text regex against the real DOM.

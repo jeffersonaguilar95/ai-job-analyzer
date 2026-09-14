@@ -1,3 +1,10 @@
+/**
+ * 'unknown' means the adapter couldn't tell — those still go through the
+ * normal LLM scoring path rather than being discarded, so an unrecognized
+ * DOM shape never silently drops a posting that might actually be remote.
+ */
+export type WorkplaceType = 'remote' | 'hybrid' | 'onsite' | 'unknown';
+
 export interface JobResult {
   /** Monotonic counter assigned on append (shared with DuplicateEntry) — the true processing order, unlike `index`, which resets per page. */
   seq: number;
@@ -9,6 +16,9 @@ export interface JobResult {
   salary: string;
   url: string;
   text: string;
+  workplaceType: WorkplaceType;
+  /** True when this entry was never sent to the LLM — score is forced to 0 (not null) so it's distinguishable from a matching-service failure. */
+  discarded: boolean;
   score: number | null;
   strengths: string[];
   gaps: string[];
@@ -51,7 +61,7 @@ export interface SiteAdapter {
   scrollContainerRectExpr: string;
   /** Expression that returns true once the detail panel has finished rendering for the just-clicked card (polled after the click, before extractExpr). */
   detailReadyExpr: string;
-  /** Expression that extracts {jobId, title, company, location, salary, url, text} after clicking card N. */
+  /** Expression that extracts {jobId, title, company, location, salary, url, text, workplaceType} after clicking card N. */
   extractExpr(index: number): string;
   /** Expression that returns {x,y} for the "next page" control, or null if there isn't one (last page of results). */
   nextPageRectExpr: string;

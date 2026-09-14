@@ -37,6 +37,26 @@ function titleCompanyLocationExprFor(cardExpr: string): string {
   })()`;
 }
 
+// LinkedIn appends the workplace type to the location string shown on the
+// card itself, e.g. "Bogotá, Colombia (Remote)" / "(Hybrid)" / "(On-site)" —
+// there's no separate element for it, so it's read off the same `location`
+// text titleCompanyLocationExprFor already extracts. UNVERIFIED against a
+// live on-site/hybrid posting; if this comes back 'unknown' for postings you
+// know aren't remote, recalibrate against the real parenthetical text.
+// 'unknown' deliberately still goes through normal LLM scoring (see
+// WorkplaceType) rather than being discarded, so a DOM change never
+// silently drops postings that might actually be remote.
+function workplaceTypeExprFor(locationExpr: string): string {
+  return `(() => {
+    const match = (${locationExpr}).match(/\\(([^)]+)\\)\\s*$/);
+    const tag = match ? match[1].trim().toLowerCase() : '';
+    if (tag === 'remote') return 'remote';
+    if (tag === 'hybrid') return 'hybrid';
+    if (tag === 'on-site' || tag === 'onsite') return 'onsite';
+    return 'unknown';
+  })()`;
+}
+
 // The last SemanticJobDetails screen in the DOM — there may be stale ones
 // left over from earlier cards, so "last" (not "only") is what identifies
 // the one for the card just clicked.
@@ -139,8 +159,9 @@ export const linkedinAdapter: SiteAdapter = {
   // empty on a posting you know lists a range.
   extractExpr: (index) => `(() => {
     const card = document.querySelectorAll('${CARD_SELECTOR}')[${index}];
-    if (!card) return { jobId: '', title: '', company: '', location: '', salary: '', url: location.href, text: '' };
+    if (!card) return { jobId: '', title: '', company: '', location: '', salary: '', url: location.href, text: '', workplaceType: 'unknown' };
     const { title, company, location } = ${titleCompanyLocationExprFor('card')};
+    const workplaceType = ${workplaceTypeExprFor('location')};
 
     const panel = ${PANEL_EXPR};
 
@@ -164,7 +185,7 @@ export const linkedinAdapter: SiteAdapter = {
       : [];
     const salary = pillTexts.find((t) => /[$€£]|\\/yr|\\/hr|per year|per hour/i.test(t)) ?? '';
 
-    return { jobId, title, company, location, salary, url, text };
+    return { jobId, title, company, location, salary, url, text, workplaceType };
   })()`,
 
   // The "Next" pagination control. Absent-or-disabled both mean "no next

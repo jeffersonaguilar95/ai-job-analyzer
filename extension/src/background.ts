@@ -1,7 +1,7 @@
 import { attach, detach, evaluate, realClick, realScroll, sleep, type Point } from './lib/cdp';
 import { getState, setState, resetState, appendResult, appendDuplicate, dedupeResults, getSettings } from './lib/storage';
 import { findAdapter } from './adapters/registry';
-import type { SiteAdapter, JobResult } from './adapters/types';
+import type { SiteAdapter, JobResult, WorkplaceType } from './adapters/types';
 import type { ExtensionMessage, ExtensionResponse } from './lib/messaging';
 
 /** URL of the local Go service (not implemented yet — see matching-service/). */
@@ -70,6 +70,13 @@ async function scrollUntilVisible(tabId: number, adapter: SiteAdapter, rectExpr:
   return rect;
 }
 
+const WORKPLACE_TYPE_LABEL: Record<WorkplaceType, string> = {
+  remote: 'Remote',
+  hybrid: 'Hybrid',
+  onsite: 'On-site',
+  unknown: 'Unknown',
+};
+
 type ProcessOutcome =
   | { kind: 'empty' } // the card doesn't exist (yet, or anymore): end of the list
   | { kind: 'duplicate'; jobId: string; title: string; company: string }
@@ -100,6 +107,7 @@ async function processCard(
     salary: string;
     url: string;
     text: string;
+    workplaceType: WorkplaceType;
   }>(tabId, adapter.extractExpr(index));
 
   // Authoritative dedup check: by now the card has been scrolled to and
@@ -111,7 +119,21 @@ async function processCard(
     return { kind: 'duplicate', jobId: extracted.jobId, title: extracted.title, company: extracted.company };
   }
 
-  const { score, strengths, gaps, reasoning } = await analyzeWithGoService(extracted);
+  // Postings LinkedIn itself tags Hybrid/On-site slip through the search's
+  // "Remote" filter often enough to be worth filtering client-side. Skipped
+  // before the (paid) LLM call, not after — this is the actual cost saved.
+  // 'unknown' still goes through normal scoring: an unrecognized DOM shape
+  // should never silently discard a posting that might be remote.
+  const isNonRemote = extracted.workplaceType === 'hybrid' || extracted.workplaceType === 'onsite';
+
+  const { score, strengths, gaps, reasoning } = isNonRemote
+    ? {
+        score: 0,
+        strengths: [],
+        gaps: [`Workplace type: ${WORKPLACE_TYPE_LABEL[extracted.workplaceType]}`],
+        reasoning: `Discarded — LinkedIn lists this job as ${WORKPLACE_TYPE_LABEL[extracted.workplaceType]}, not Remote.`,
+      }
+    : await analyzeWithGoService(extracted);
 
   return {
     kind: 'scored',
@@ -124,6 +146,8 @@ async function processCard(
       salary: extracted.salary,
       url: extracted.url,
       text: extracted.text,
+      workplaceType: extracted.workplaceType,
+      discarded: isNonRemote,
       score,
       strengths,
       gaps,

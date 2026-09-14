@@ -62,6 +62,7 @@ function renderState(state: RunState): void {
   const rows: Row[] = [];
   for (const r of state.results) {
     const tr = document.createElement('tr');
+    if (r.discarded) tr.className = 'discarded';
     tr.innerHTML = `<td>${r.score ?? '—'}</td><td>${escapeHtml(r.title)}</td><td>${escapeHtml(r.company)}</td><td>${escapeHtml(r.jobId)}</td>`;
     rows.push({ seq: r.seq, el: tr });
   }
@@ -82,7 +83,7 @@ function download(filename: string, mime: string, content: string): void {
 }
 
 function toCsv(results: JobResult[]): string {
-  const header = ['score', 'title', 'company', 'location', 'salary', 'url', 'strengths', 'gaps', 'reasoning'];
+  const header = ['score', 'discarded', 'title', 'company', 'location', 'workplaceType', 'salary', 'url', 'strengths', 'gaps', 'reasoning'];
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
   const joinPoints = (points: string[]) => points.map((p) => `- ${p}`).join('\n');
   const lines = [header.join(',')];
@@ -90,9 +91,11 @@ function toCsv(results: JobResult[]): string {
     lines.push(
       [
         escape(r.score ?? ''),
+        escape(r.discarded ? 'yes' : ''),
         escape(r.title),
         escape(r.company),
         escape(r.location),
+        escape(r.workplaceType),
         escape(r.salary),
         escape(r.url),
         escape(joinPoints(r.strengths)),
