@@ -115,7 +115,10 @@ HTML from the target site (search-results page, detail view, pagination
 control), and the selectors/logic are derived from that sample rather than
 a live browsing session — so, like LinkedIn's, they're calibrated against a
 single snapshot and should be treated as placeholders until confirmed with
-a real run (see below). Not every job board is a LinkedIn-style list of
+a real run (see below). Run `/add-portal` (`.claude/commands/add-portal.md`)
+to drive this end to end — it asks for the URL/HTML it needs, writes the
+adapter file, registers it, updates `manifest.json`'s `host_permissions` if
+needed, and documents whatever it couldn't verify without a live browser. Not every job board is a LinkedIn-style list of
 cards, either — `extension/src/adapters/welcometothejungle.ts` (Otta under
 the hood) is a "one job at a time" swipe view with a `next-button` instead
 of a card list, modeled as a page that always has exactly one card
