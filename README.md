@@ -1,22 +1,160 @@
 # AI Job Analyzer
 
-Chrome extension that walks the results of a job search you already ran
-manually (login and search included), and scores each posting from 0 to 100
-against your CV, using a local Go service that calls the Claude API for the
-match reasoning.
+A Chrome extension that walks through a job search you've already run
+manually (LinkedIn today, more job boards over time), reads each posting,
+and scores it from 0 to 100 against your CV using Claude. You get back a
+ranked list you can export as CSV or JSON.
 
-**It never applies to anything automatically.** It only reads, extracts text,
-and shows a ranking. You click "Start" from the popup; it never starts on
-its own.
+**It never applies to anything automatically.** It only reads postings and
+scores them. It never starts on its own — you always click "Start" in the
+popup yourself.
 
 ## ⚠️ Legal notice
 
-This extension automates real clicks and scrolls (via `chrome.debugger` / CDP)
-on LinkedIn pages already authenticated with your session. **Automating
-interactions on LinkedIn may violate its Terms of Service** and expose you to
-account restriction or a ban. This project is for personal/educational use;
-use it at your own discretion and risk. It is not affiliated with LinkedIn or
-any other job board.
+This extension automates real clicks and scrolls (via Chrome's `chrome.debugger`
+/ CDP API) on job board pages you're already logged into. **Automating
+interactions on sites like LinkedIn may violate their Terms of Service** and
+could get your account restricted or banned. This project is for personal,
+educational use — use it at your own discretion and risk. It isn't affiliated
+with LinkedIn, Welcome to the Jungle, or any other job board.
+
+## What you need before you start
+
+You'll install three things and get one API key. None of this requires prior
+experience with Node.js or Go.
+
+| Requirement | Why | How to check if you have it |
+|---|---|---|
+| **Node.js 18+** and **Yarn** | Builds the Chrome extension | `node -v` and `yarn -v` |
+| **Go 1.24+** | Runs the local scoring service | `go version` |
+| **Google Chrome** | Runs the extension | already installed, most likely |
+| **An Anthropic API key** | Lets the scoring service call Claude | you'll create one below |
+| **Your CV as a PDF** | What each job gets scored against | any PDF export works |
+
+### Installing Node.js and Yarn (macOS)
+
+If you don't have Node yet, the easiest way is [Homebrew](https://brew.sh):
+
+```bash
+brew install node
+corepack enable        # ships with Node 18+, enables `yarn` without a separate install
+```
+
+Don't have Homebrew? Download the Node.js installer directly from
+[nodejs.org](https://nodejs.org/) (pick the "LTS" version), then run
+`corepack enable` afterwards.
+
+### Installing Go (macOS)
+
+```bash
+brew install go
+```
+
+Or download the installer from [go.dev/dl](https://go.dev/dl/).
+
+### Getting an Anthropic API key
+
+1. Go to [console.anthropic.com](https://console.anthropic.com/) and sign
+   up or log in.
+2. Open **API Keys** in the left sidebar and click **Create Key**.
+3. Copy the key (starts with `sk-ant-...`) — you'll paste it into `.env` in
+   step 2 below. Keep it private; anyone with this key can spend on your
+   account.
+
+Using Claude costs a small amount per job scored (this project defaults to
+the inexpensive `claude-haiku-4-5` model). You'll need billing set up on
+your Anthropic account for the key to work.
+
+## Quick start
+
+Five steps, from a fresh clone to a working extension.
+
+**1. Clone this repo and open a terminal in it.**
+
+```bash
+git clone <this-repo-url>
+cd ai-job-analyzer
+```
+
+**2. Set your API key.**
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` in any text editor and replace the placeholder with the key you
+copied above:
+
+```
+ANTHROPIC_API_KEY=sk-ant-your-real-key-here
+```
+
+**3. Add your CV.**
+
+Drop a PDF of your CV/resume into `resources/cv/` (create the folder if it's
+not there). Exactly one PDF should be in that folder — the script picks it
+up automatically.
+
+```bash
+cp ~/Downloads/my-cv.pdf resources/cv/
+```
+
+**4. Run everything with one command.**
+
+```bash
+./scripts/start.sh
+```
+
+This builds the extension, builds and starts the local scoring service, and
+opens Chrome with the extension pre-loaded — in its own separate profile, so
+it never touches your regular Chrome logins or history. The first run takes
+a bit longer while it downloads dependencies.
+
+**5. Use it.**
+
+1. In the Chrome window that just opened, go to LinkedIn, log in, and run
+   whatever job search you want analyzed.
+2. Click the extension's icon in the toolbar to open the popup, then click
+   **Start**.
+3. Watch it work — you'll see it genuinely clicking and scrolling through
+   the results, and Chrome will show a banner saying "this extension is
+   debugging this browser." That's expected; it's what lets you watch it
+   live and confirm it's only reading, never applying.
+4. Click **Stop** any time — nothing already scored is lost. Click **Start**
+   again to resume where it left off.
+5. Once you have results, export them as CSV or JSON from the popup, sorted
+   highest score to lowest.
+
+Stop everything by pressing `Ctrl+C` in the terminal, or by closing the
+Chrome window `start.sh` opened.
+
+### If something goes wrong
+
+- **`yarn is not installed` / `go is not installed`** — revisit the
+  Prerequisites section above; the script checks for both before doing
+  anything else.
+- **`No CV found in resources/cv/`** — make sure there's exactly one `.pdf`
+  file directly inside `resources/cv/` (not a subfolder). If you have more
+  than one, either remove the extras or set `CV_PATH=/absolute/path/to/cv.pdf`
+  explicitly before running the script.
+- **`ANTHROPIC_API_KEY is not set`** — check that `.env` exists (not just
+  `.env.example`) and has your real key on the `ANTHROPIC_API_KEY=` line.
+- **Chrome doesn't open automatically** — the script still starts the
+  scoring service; you'll just need to load the extension yourself: go to
+  `chrome://extensions`, enable "Developer mode" (top right), click "Load
+  unpacked", and select the `extension/dist` folder. If Chrome is installed
+  somewhere non-standard, set `CHROME_BIN=/path/to/Chrome` before running
+  the script.
+- **Port 8787 already in use** — set `PORT=8788` (or any free port) before
+  running the script.
+- **Scores keep coming back empty/null** — this means the extension can't
+  reach the scoring service. Check the terminal output for errors from
+  `matching-service`; a missing or invalid `ANTHROPIC_API_KEY` is the most
+  common cause.
+
+All of the environment variables above (`CV_PATH`, `PORT`, `CHROME_BIN`,
+`ANTHROPIC_MODEL`) can also be set permanently in your `.env` file instead
+of prefixing the command each time — see `.env.example` for the full list.
 
 ## How it works (architecture)
 
@@ -62,38 +200,14 @@ any other job board.
   `resources/cv/` (your CV PDF); more subfolders may be added later as the
   project needs other personal inputs.
 - `scripts/` — convenience scripts; `scripts/start.sh` runs everything with
-  one command (see Quick start below).
+  one command (see Quick start above).
 
-## Quick start (one command)
+## Running each half manually
 
-```bash
-cp .env.example .env   # then edit .env and set your ANTHROPIC_API_KEY
-cp /path/to/your-cv.pdf resources/cv/
-./scripts/start.sh
-```
+Useful if you're developing on the extension or the Go service directly,
+instead of going through `scripts/start.sh`.
 
-`scripts/start.sh` loads `.env` automatically (see `.env.example` for all
-supported variables) — anything already exported in your shell takes
-precedence, so `ANTHROPIC_API_KEY=... ./scripts/start.sh` still works without
-a `.env` file. `.env` is gitignored; only `.env.example` is committed.
-
-This builds the extension, builds and starts `matching-service`, and (if
-Chrome is installed at the usual macOS path) opens it with the extension
-already loaded, in a dedicated profile that never touches your regular
-Chrome session or its logins. Stop everything with `Ctrl+C`, or by closing
-that Chrome window.
-
-`resources/cv/` must contain exactly one PDF (the script errors out if it's
-empty or has more than one — set `CV_PATH` explicitly to disambiguate). If
-Chrome isn't found automatically, the script still starts
-`matching-service` and tells you to load `extension/dist` manually via
-`chrome://extensions`. Override the Chrome binary with `CHROME_BIN=...` or
-the port with `PORT=...` if needed.
-
-The sections below cover running each half manually, and are what
-`scripts/start.sh` does under the hood.
-
-## Extension: running it locally
+### Extension
 
 ```bash
 cd extension
@@ -115,14 +229,14 @@ Usage:
    **Start** again resumes from where it left off.
 5. Export CSV/JSON with the results sorted from highest to lowest score.
 
-### Adding a new job board
+#### Adding a new job board
 
 Write a new `SiteAdapter` in `extension/src/adapters/` (selectors and timings
 specific to that site) and register it in
 `extension/src/adapters/registry.ts`. The loop in `background.ts` doesn't
 need any changes.
 
-## matching-service: running it locally
+### matching-service
 
 ```bash
 cd matching-service
