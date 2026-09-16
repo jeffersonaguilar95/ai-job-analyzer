@@ -196,9 +196,10 @@ of prefixing the command each time — see `.env.example` for the full list.
 - `extension/` — Chrome MV3 extension in TypeScript (functional skeleton).
 - `matching-service/` — Go scoring service (CV + Claude API), see
   `matching-service/README.md`.
-- `resources/` — local, gitignored files you drop in yourself. Today just
-  `resources/cv/` (your CV PDF); more subfolders may be added later as the
-  project needs other personal inputs.
+- `resources/` — local, gitignored files you drop in yourself:
+  `resources/cv/` (your CV — a `.tex` source plus its compiled PDF) and
+  `resources/profile/` (used only by `/tailor-cv`); more subfolders may be
+  added later as the project needs other personal inputs.
 - `scripts/` — convenience scripts; `scripts/start.sh` runs everything with
   one command (see Quick start above).
 
@@ -248,6 +249,48 @@ go build -o bin/matching-service .
 
 See `matching-service/README.md` for the full API contract and optional env vars.
 
+## Tailoring your CV to a specific job offer (optional)
+
+`/tailor-cv` is a Claude Code slash command (`.claude/commands/tailor-cv.md`):
+given a job posting URL or pasted text, it rewrites your CV to better
+surface skills the posting asks for — reordering and rewording *existing,
+true* content only, never inventing experience. It runs entirely in your
+Claude Code session (no separate binary or API call to debug blind), never
+touches your base CV, and writes a new tailored copy per offer under
+`resources/cv/tailored/`.
+
+Extra prerequisite for a compiled PDF output (optional — the command still
+works without it, just skips PDF compilation): a LaTeX distribution
+providing `pdflatex`. Check if you already have it:
+
+```bash
+which pdflatex
+```
+
+If that prints a path, you're set. If not, the simplest way to install it
+on macOS is via Homebrew:
+
+```bash
+brew install --cask basictex
+```
+
+Open a **new** terminal window afterwards (so your `PATH` picks it up),
+then confirm with `which pdflatex` again. No Homebrew? Download the
+"BasicTeX" installer from [tug.org/mactex/morepackages.html](https://tug.org/mactex/morepackages.html) instead.
+
+In Claude Code:
+
+```
+/tailor-cv https://example.com/jobs/1234
+```
+
+(or paste the posting text directly instead of a URL). First run creates
+`resources/profile/skills.md` for you to fill in with technical detail
+that doesn't fit on a one-page CV (extra tools, quantifiable achievements,
+certifications, domain knowledge) — this is the extra ground truth the
+command draws on to surface real skills. See
+`.claude/commands/tailor-cv.md` for the full flow.
+
 ## Status / roadmap
 
 - [x] Extension skeleton (MV3 manifest + `debugger` permission).
@@ -260,3 +303,5 @@ See `matching-service/README.md` for the full API contract and optional env vars
 - [x] Second adapter (Welcome to the Jungle, `jobs-matches` grid) —
       selectors calibrated from pasted samples, not yet verified live.
 - [ ] Adapters for other job boards (2-4h extra each).
+- [x] `/tailor-cv`: Claude Code slash command that tailors the CV (LaTeX
+      source) to a specific job posting URL or pasted text.

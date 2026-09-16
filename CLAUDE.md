@@ -10,7 +10,7 @@ scores each posting against the user's CV, and shows a ranked list. It never
 applies to anything automatically, and it never starts on its own — only from
 the popup's Start button. Full write-up and legal/ToS disclaimer: `README.md`.
 
-Two independent parts:
+Three independent parts:
 - `extension/` — TypeScript, Manifest V3. Functional skeleton.
 - `matching-service/` — Go service serving `POST /analyze`: sends the CV (as
   a native PDF document block, read once at startup) plus the job posting
@@ -18,13 +18,29 @@ Two independent parts:
   structured `{score, reasoning}` JSON via `output_config.format`.
   `background.ts` degrades gracefully (`score: null`) when this service
   isn't running, so the extension is testable standalone.
+- `/tailor-cv` — a Claude Code slash command (`.claude/commands/tailor-cv.md`),
+  **not code that ships in this repo's build** — fully isolated from
+  `extension/` and `matching-service/`, not wired into `scripts/start.sh`.
+  Given a job posting URL or pasted text, it tailors the user's CV to that
+  posting: reordering/rewording existing, true content (from the CV itself
+  and from `resources/profile/`) to better surface skills the posting asks
+  for — never inventing anything. See "tailor-cv" below. (This used to be a
+  standalone Go CLI, `cv-tailor/`; it was removed in favor of a slash
+  command run inside Claude Code, so the whole flow — fetching the
+  posting, reading the CV, asking clarifying questions, rewriting — happens
+  in a session Claude can see and debug directly, instead of behind an
+  opaque API call in a separate binary.)
 
-`resources/` holds local, gitignored files the user drops in (only
-`resources/cv/` today — the CV PDF; more subfolders may be added later).
-`scripts/start.sh` is the one-command entry point: builds the extension,
-resolves `CV_PATH` from `resources/cv/` if not already set, builds and
-starts `matching-service`, and launches Chrome with the extension pre-loaded
-in a dedicated profile.
+`resources/` holds local, gitignored files the user drops in:
+`resources/cv/` (the CV — a `.tex` source plus its compiled PDF, which is
+what `matching-service` reads, and what `/tailor-cv` reads and tailors) and
+`resources/profile/` (a free-form skills/achievements file only
+`/tailor-cv` reads). More subfolders may be added later. `scripts/start.sh`
+is the one-command entry point for the extension + `matching-service` pair:
+builds the extension, resolves `CV_PATH` from `resources/cv/` if not
+already set, builds and starts `matching-service`, and launches Chrome with
+the extension pre-loaded in a dedicated profile. `/tailor-cv` is invoked
+separately and manually from within Claude Code — see "tailor-cv" below.
 
 ## Language convention
 
@@ -83,6 +99,16 @@ From `matching-service/` (requires Go 1.24+ and `ANTHROPIC_API_KEY` /
 go build -o bin/matching-service .
 ./bin/matching-service
 ```
+
+`/tailor-cv` (optional, requires a `.tex` CV in `resources/cv/` — see
+`.claude/commands/tailor-cv.md`; not part of `./scripts/start.sh`, run
+manually per job offer) is invoked from within a Claude Code session:
+
+```
+/tailor-cv https://example.com/jobs/1234
+```
+
+(or paste the posting text directly instead of a URL).
 
 ## Architecture
 
@@ -156,6 +182,40 @@ if the port changes, update the constant in `background.ts` and the matching
 `matching-service` reads the CV once at startup (no per-request disk I/O,
 nothing written to disk) and uses Claude's native PDF document input rather
 than a separate Go PDF-parsing library.
+
+**tailor-cv** (`.claude/commands/tailor-cv.md`) used to be a separate Go
+module (`cv-tailor/`, own `go.mod`, its own `anthropic-sdk-go` call) —
+removed after repeated `context deadline exceeded` failures that were hard
+to debug from outside a black-box binary. It's now a Claude Code slash
+command: the whole flow (fetching the posting, reading the CV and profile,
+gap analysis, clarifying questions, rewriting, writing output, compiling)
+runs as ordinary tool calls inside the current session, so any failure is
+directly visible and debuggable instead of hidden behind a single API
+request with its own timeout. Its base CV is `resources/cv/<name>.tex`
+(exactly one `.tex` file must be there), the same source the compiled
+`resources/cv/*.pdf` — the one `matching-service` reads — is generated
+from. Run manually per job offer (`/tailor-cv <url-or-text>` inside Claude
+Code), never from `scripts/start.sh`. Format fidelity is enforced by
+explicit instruction rather than code-level structural separation: the
+command tells Claude to split the base `.tex` at `\begin{document}` into a
+preamble (copied byte-for-byte into the output, never touched) and a body
+(the only part ever reordered/reworded), and to run a grounding pass
+before writing anything to disk. The command drives a gap analysis against
+the CV and `resources/profile/skills.md` (a free-form, user-maintained
+file of true skills/achievements that don't fit on a one-page CV —
+auto-scaffolded on first run if missing, which stops the run so the user
+can fill it in before continuing), asks the user clarifying questions
+directly in chat for genuine gaps, and incorporates an answer only when it
+affirmatively confirms something true — never invents employers, dates, or
+technologies. Output never overwrites the base CV: it's written to
+`resources/cv/tailored/<company>-<role>/` (`cv.tex`, `changelog.md`, and a
+compiled `cv.pdf` if `pdflatex` is on `PATH`) — a subfolder, so
+`scripts/start.sh`'s "exactly one PDF in `resources/cv/`" auto-detect for
+`matching-service` stays unaffected. Job posting fetch uses Claude Code's
+own `WebFetch` tool — a deliberate improvement over the old plain HTTP GET,
+though it still won't reliably work on JS-rendered or login-gated pages
+(LinkedIn, most SPA-based boards), so a failed or too-thin fetch falls back
+to asking the user to paste the posting text directly in chat instead.
 
 ## Known placeholder / to calibrate
 
