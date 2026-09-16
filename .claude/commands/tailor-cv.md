@@ -34,6 +34,26 @@ The input is `$ARGUMENTS`.
   posting URL supplied by the user is the one exception).
 - Extract and keep the **company name**, **role title**, and the **full
   posting text** — you'll need all three later.
+- **Check for a duplicate before doing anything else.** Every
+  `resources/cv/tailored/*/changelog.md` records its posting's URL on a
+  `- **Source:**` line (see Step 4). If this run has a URL (skip this
+  check entirely for pasted-text input with no URL), search those
+  changelogs for it:
+  ```bash
+  grep -rl "4467448074" resources/cv/tailored/*/changelog.md
+  ```
+  Match on the **numeric job ID** (the digits in `/jobs/view/<id>/`), not
+  the full URL string — LinkedIn redirects between regional subdomains
+  (`www.` vs `uk.` etc.) and appends tracking params, so the same posting
+  can show up under different URLs; the ID is the stable part, and
+  existing changelogs already record both the original and any redirected
+  URL on that one line, so an ID substring match catches it regardless of
+  which form is stored. If a match is found, **stop here**: tell the user
+  this posting was already tailored, point them to that folder (name,
+  path, and its `## Fit score` from the changelog), and don't run the gap
+  analysis, ask clarifying questions, or write anything. Only proceed
+  anyway if the user explicitly says to re-run it (e.g. the base CV or
+  their profile changed since then).
 
 ## Step 1: Load the sources
 
