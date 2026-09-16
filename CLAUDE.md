@@ -18,29 +18,36 @@ Three independent parts:
   structured `{score, reasoning}` JSON via `output_config.format`.
   `background.ts` degrades gracefully (`score: null`) when this service
   isn't running, so the extension is testable standalone.
-- `/tailor-cv` — a Claude Code slash command (`.claude/commands/tailor-cv.md`),
-  **not code that ships in this repo's build** — fully isolated from
-  `extension/` and `matching-service/`, not wired into `scripts/start.sh`.
-  Given a job posting URL or pasted text, it tailors the user's CV to that
-  posting: reordering/rewording existing, true content (from the CV itself
-  and from `resources/profile/`) to better surface skills the posting asks
-  for — never inventing anything. See "tailor-cv" below. (This used to be a
-  standalone Go CLI, `cv-tailor/`; it was removed in favor of a slash
-  command run inside Claude Code, so the whole flow — fetching the
-  posting, reading the CV, asking clarifying questions, rewriting — happens
-  in a session Claude can see and debug directly, instead of behind an
-  opaque API call in a separate binary.)
+- `.claude/commands/` — Claude Code slash commands, **not code that ships
+  in this repo's build** — fully isolated from `extension/` and
+  `matching-service/`, not wired into `scripts/start.sh`. Two commands live
+  here so far:
+  - `/setup-cv` (`setup-cv.md`) — one-time bridge from a plain PDF resume
+    to an editable `.tex` CV, transcribing faithfully and never inventing
+    anything. See "setup-cv" below.
+  - `/tailor-cv` (`tailor-cv.md`) — given a job posting URL or pasted text,
+    tailors the user's CV to that posting: reordering/rewording existing,
+    true content (from the CV itself and from `resources/profile/`) to
+    better surface skills the posting asks for — never inventing anything.
+    See "tailor-cv" below. (This used to be a standalone Go CLI,
+    `cv-tailor/`; it was removed in favor of a slash command run inside
+    Claude Code, so the whole flow — fetching the posting, reading the CV,
+    asking clarifying questions, rewriting — happens in a session Claude
+    can see and debug directly, instead of behind an opaque API call in a
+    separate binary.)
 
 `resources/` holds local, gitignored files the user drops in:
 `resources/cv/` (the CV — a `.tex` source plus its compiled PDF, which is
-what `matching-service` reads, and what `/tailor-cv` reads and tailors) and
-`resources/profile/` (a free-form skills/achievements file only
-`/tailor-cv` reads). More subfolders may be added later. `scripts/start.sh`
-is the one-command entry point for the extension + `matching-service` pair:
-builds the extension, resolves `CV_PATH` from `resources/cv/` if not
-already set, builds and starts `matching-service`, and launches Chrome with
-the extension pre-loaded in a dedicated profile. `/tailor-cv` is invoked
-separately and manually from within Claude Code — see "tailor-cv" below.
+what `matching-service` reads, and what `/tailor-cv` reads and tailors;
+`resources/cv/original/` holds the pre-conversion PDF once `/setup-cv` has
+run, archived rather than deleted) and `resources/profile/` (a free-form
+skills/achievements file only `/tailor-cv` reads). More subfolders may be
+added later. `scripts/start.sh` is the one-command entry point for the
+extension + `matching-service` pair: builds the extension, resolves
+`CV_PATH` from `resources/cv/` if not already set, builds and starts
+`matching-service`, and launches Chrome with the extension pre-loaded in a
+dedicated profile. `/setup-cv` and `/tailor-cv` are invoked separately and
+manually from within Claude Code — see their sections below.
 
 ## Language convention
 
@@ -100,15 +107,25 @@ go build -o bin/matching-service .
 ./bin/matching-service
 ```
 
-`/tailor-cv` (optional, requires a `.tex` CV in `resources/cv/` — see
-`.claude/commands/tailor-cv.md`; not part of `./scripts/start.sh`, run
-manually per job offer) is invoked from within a Claude Code session:
+`/setup-cv` and `/tailor-cv` (both optional, not part of
+`./scripts/start.sh`, both invoked manually from within a Claude Code
+session) are the CV-editing workflow:
+
+```
+/setup-cv
+```
+
+Run once, after dropping a PDF resume into `resources/cv/` and before ever
+running `/tailor-cv` for the first time — converts that PDF into an
+editable `.tex` CV (see `.claude/commands/setup-cv.md`). Skips itself
+(reports "already set up" and stops) if a `.tex` is already present.
 
 ```
 /tailor-cv https://example.com/jobs/1234
 ```
 
-(or paste the posting text directly instead of a URL).
+(or paste the posting text directly instead of a URL). Requires a `.tex`
+CV in `resources/cv/` — see `.claude/commands/tailor-cv.md`.
 
 ## Architecture
 
@@ -182,6 +199,28 @@ if the port changes, update the constant in `background.ts` and the matching
 `matching-service` reads the CV once at startup (no per-request disk I/O,
 nothing written to disk) and uses Claude's native PDF document input rather
 than a separate Go PDF-parsing library.
+
+**setup-cv** (`.claude/commands/setup-cv.md`) is the one-time bridge
+between "I only have a PDF resume" and "I have an editable `.tex` CV" that
+`/tailor-cv` (and any manual editing) needs. It reads the single PDF found
+directly under `resources/cv/`, transcribes it into a generic,
+already-styled LaTeX template embedded in the command file itself (single
+column, sans-serif, accent-colored section rules, tight bullets, clickable
+links — the same look `/tailor-cv` preserves byte-for-byte afterward), and
+runs a grounding pass before writing anything, the same anti-invention
+discipline `/tailor-cv` uses. The trickiest part is sequencing the
+filesystem changes so `resources/cv/` never ends up in a broken
+intermediate state for the other two consumers (`scripts/start.sh`'s
+exactly-one-PDF auto-detect, and `/tailor-cv`'s exactly-one-`.tex`
+auto-detect): the original PDF is only moved into
+`resources/cv/original/` (archived, never deleted) *after* the newly
+compiled PDF successfully lands next to the new `.tex` — if `pdflatex` is
+missing or compilation fails, the original PDF is left exactly where it
+was, so `matching-service` keeps working off it in the meantime. Complex
+multi-column or graphics-heavy resume layouts are a known extraction risk
+(reading order can scramble) — the command is instructed to flag anything
+ambiguous rather than guess, and the final report always asks the user to
+eyeball-compare the two PDFs once.
 
 **tailor-cv** (`.claude/commands/tailor-cv.md`) used to be a separate Go
 module (`cv-tailor/`, own `go.mod`, its own `anthropic-sdk-go` call) —

@@ -99,6 +99,12 @@ up automatically.
 cp ~/Downloads/my-cv.pdf resources/cv/
 ```
 
+That's all you need for scoring — `matching-service` reads the PDF
+directly. If you also want to *edit* your CV's wording later, or generate
+a version tailored to a specific job posting, see
+[Customizing your CV](#customizing-your-cv-optional) below — that needs an
+extra one-time conversion step.
+
 **4. Run everything with one command.**
 
 ```bash
@@ -197,7 +203,8 @@ of prefixing the command each time — see `.env.example` for the full list.
 - `matching-service/` — Go scoring service (CV + Claude API), see
   `matching-service/README.md`.
 - `resources/` — local, gitignored files you drop in yourself:
-  `resources/cv/` (your CV — a `.tex` source plus its compiled PDF) and
+  `resources/cv/` (your CV — a PDF is all `matching-service` needs; a
+  `.tex` source and its compiled PDF once you've run `/setup-cv`) and
   `resources/profile/` (used only by `/tailor-cv`); more subfolders may be
   added later as the project needs other personal inputs.
 - `scripts/` — convenience scripts; `scripts/start.sh` runs everything with
@@ -249,19 +256,15 @@ go build -o bin/matching-service .
 
 See `matching-service/README.md` for the full API contract and optional env vars.
 
-## Tailoring your CV to a specific job offer (optional)
+## Customizing your CV (optional)
 
-`/tailor-cv` is a Claude Code slash command (`.claude/commands/tailor-cv.md`):
-given a job posting URL or pasted text, it rewrites your CV to better
-surface skills the posting asks for — reordering and rewording *existing,
-true* content only, never inventing experience. It runs entirely in your
-Claude Code session (no separate binary or API call to debug blind), never
-touches your base CV, and writes a new tailored copy per offer under
-`resources/cv/tailored/`.
+Both of these are Claude Code slash commands — typed in a Claude Code chat
+session (not a terminal command), and both are entirely optional: the core
+extension + scoring flow above works off your CV PDF alone and never needs
+either of them.
 
-Extra prerequisite for a compiled PDF output (optional — the command still
-works without it, just skips PDF compilation): a LaTeX distribution
-providing `pdflatex`. Check if you already have it:
+Both can produce a compiled PDF, which needs a LaTeX distribution providing
+`pdflatex`. Check if you already have it:
 
 ```bash
 which pdflatex
@@ -276,9 +279,38 @@ brew install --cask basictex
 
 Open a **new** terminal window afterwards (so your `PATH` picks it up),
 then confirm with `which pdflatex` again. No Homebrew? Download the
-"BasicTeX" installer from [tug.org/mactex/morepackages.html](https://tug.org/mactex/morepackages.html) instead.
+"BasicTeX" installer from [tug.org/mactex/morepackages.html](https://tug.org/mactex/morepackages.html)
+instead. Neither command *requires* `pdflatex` — without it, you still get
+the editable `.tex` file, just no freshly compiled PDF.
 
-In Claude Code:
+### Step 1: make your CV editable — `/setup-cv`
+
+Your CV starts out as just a PDF, which isn't something Claude can reorder
+or reword directly. `/setup-cv` is a one-time conversion: it transcribes
+your PDF into a clean, editable LaTeX (`.tex`) CV — faithfully, never
+adding or embellishing anything — and compiles it back to a PDF so
+`matching-service` keeps working exactly as before. Run it once, in Claude
+Code, after step 3 of Quick start above:
+
+```
+/setup-cv
+```
+
+It reports back which sections it transcribed and flags anything it
+couldn't read confidently, and your original PDF is archived (not
+deleted) under `resources/cv/original/`. Skip this step entirely if you'd
+rather hand-write your CV in LaTeX yourself — just drop a single `.tex`
+file into `resources/cv/` and `/setup-cv` will recognize it's already done.
+
+### Step 2: tailor it to a specific job offer — `/tailor-cv`
+
+Given a job posting URL or pasted text, `/tailor-cv` rewrites your CV to
+better surface skills the posting asks for — reordering and rewording
+*existing, true* content only, never inventing experience. It runs
+entirely in your Claude Code session (no separate binary or API call to
+debug blind), never touches your base CV, and writes a new tailored copy
+per offer under `resources/cv/tailored/`. Requires the `.tex` CV from step
+1 above.
 
 ```
 /tailor-cv https://example.com/jobs/1234
@@ -305,3 +337,6 @@ command draws on to surface real skills. See
 - [ ] Adapters for other job boards (2-4h extra each).
 - [x] `/tailor-cv`: Claude Code slash command that tailors the CV (LaTeX
       source) to a specific job posting URL or pasted text.
+- [x] `/setup-cv`: Claude Code slash command that converts a PDF resume
+      into an editable LaTeX CV, one time, so `/tailor-cv` has something
+      to work with.
