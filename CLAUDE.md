@@ -247,8 +247,9 @@ can fill it in before continuing), asks the user clarifying questions
 directly in chat for genuine gaps, and incorporates an answer only when it
 affirmatively confirms something true — never invents employers, dates, or
 technologies. Output never overwrites the base CV: it's written to
-`resources/cv/tailored/<company>-<role>/` (`cv.tex`, `changelog.md`, and a
-compiled `cv.pdf` if `pdflatex` is on `PATH`) — a subfolder, so
+`resources/cv/tailored/<company>-<role>/` (reusing the base CV's own
+filename, e.g. `cv-jefferson-aguilar.tex`, plus `changelog.md` and a
+compiled PDF of the same name if `pdflatex` is on `PATH`) — a subfolder, so
 `scripts/start.sh`'s "exactly one PDF in `resources/cv/`" auto-detect for
 `matching-service` stays unaffected. Job posting fetch uses Claude Code's
 own `WebFetch` tool — a deliberate improvement over the old plain HTTP GET,

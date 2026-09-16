@@ -149,10 +149,14 @@ a single `-`, trimmed of leading/trailing `-` (e.g. "Acme Corp" + "Senior
 Backend Engineer" → `acme-corp-senior-backend-engineer`). Never overwrite
 the base CV in `resources/cv/`.
 
-Write to `resources/cv/tailored/<slug>/`:
+Write to `resources/cv/tailored/<slug>/`, reusing the base CV's own
+filename (e.g. `resources/cv/cv-jefferson-aguilar.tex` →
+`resources/cv/tailored/<slug>/cv-jefferson-aguilar.tex`) instead of a
+generic `cv.tex` — keeps every tailored copy easy to recognize regardless
+of which folder it's opened from:
 
-- **`cv.tex`** — the original preamble (verbatim) + the revised body +
-  `\end{document}`.
+- **`<base-cv-filename>.tex`** — the original preamble (verbatim) + the
+  revised body + `\end{document}`.
 - **`changelog.md`** — what changed and why, one bullet per change,
   referencing which requirement it addresses. Include the role, company,
   and source posting URL (or "pasted by user" if there was no URL) at the
@@ -161,12 +165,13 @@ Write to `resources/cv/tailored/<slug>/`:
 
 ## Step 5: Compile to PDF (best-effort)
 
-If `pdflatex` is on `PATH`, compile `cv.tex` from inside its output
-directory, twice (the first pass resolves hyperref's outline/bookmark
-references, which otherwise print a harmless "rerun" warning):
+If `pdflatex` is on `PATH`, compile `<base-cv-filename>.tex` from inside
+its output directory, twice (the first pass resolves hyperref's
+outline/bookmark references, which otherwise print a harmless "rerun"
+warning):
 
 ```bash
-cd resources/cv/tailored/<slug> && pdflatex -interaction=nonstopmode -halt-on-error cv.tex && pdflatex -interaction=nonstopmode -halt-on-error cv.tex
+cd resources/cv/tailored/<slug> && pdflatex -interaction=nonstopmode -halt-on-error <base-cv-filename>.tex && pdflatex -interaction=nonstopmode -halt-on-error <base-cv-filename>.tex
 ```
 
 If `pdflatex` isn't available, or compilation fails, say so plainly — the
