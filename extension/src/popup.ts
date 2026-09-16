@@ -88,7 +88,10 @@ function download(filename: string, mime: string, content: string): void {
 }
 
 function toCsv(results: JobResult[]): string {
-  const header = ['score', 'title', 'company', 'location', 'workplaceType', 'salary', 'url', 'strengths', 'gaps', 'reasoning'];
+  // 'status' is left blank on export — not tracked by the extension, it's
+  // a free column for the user to fill in manually (applied/discarded/etc.)
+  // once the CSV is open in a spreadsheet.
+  const header = ['score', 'status', 'title', 'company', 'location', 'workplaceType', 'salary', 'url', 'strengths', 'gaps', 'reasoning'];
   const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
   const joinPoints = (points: string[]) => points.map((p) => `- ${p}`).join('\n');
   const lines = [header.join(',')];
@@ -96,6 +99,7 @@ function toCsv(results: JobResult[]): string {
     lines.push(
       [
         escape(r.score ?? ''),
+        escape(''),
         escape(r.title),
         escape(r.company),
         escape(r.location),
