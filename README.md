@@ -9,7 +9,38 @@ ranked list you can export as CSV or JSON.
 scores them. It never starts on its own — you always click "Start" in the
 popup yourself.
 
-## ⚠️ Legal notice
+## Table of contents
+
+- [What is this?](#what-is-this)
+- [Legal notice](#legal-notice)
+- [Do you need Claude Code?](#do-you-need-claude-code)
+- [What you need before you start](#what-you-need-before-you-start)
+- [Quick start](#quick-start)
+  - [If something goes wrong](#if-something-goes-wrong)
+- [How it works (architecture)](#how-it-works-architecture)
+- [Repo structure](#repo-structure)
+- [Running each half manually](#running-each-half-manually)
+- [Customizing your CV (optional, needs Claude Code)](#customizing-your-cv-optional)
+- [Status and roadmap](#status-and-roadmap)
+
+## What is this?
+
+The project has two independent pieces. You only need the first one to get
+value out of it; the second is a bonus if you also have Claude Code.
+
+1. **The extension + scoring service** (always available, no Claude Code
+   needed). You run a job search on LinkedIn yourself, click **Start** in
+   the extension popup, and it clicks through each result the same way you
+   would — reading the posting text and sending it, along with your CV, to
+   Claude for a 0-100 fit score and a short explanation. Export the ranked
+   list as CSV or JSON when you're done.
+2. **CV tailoring** (optional, requires Claude Code — see the next
+   section). Two Claude Code slash commands, `/setup-cv` and `/tailor-cv`,
+   turn your CV into an editable file and can rewrite a copy of it to
+   better match a specific job posting — reordering and rewording only,
+   never inventing experience.
+
+## Legal notice
 
 This extension automates real clicks and scrolls (via Chrome's `chrome.debugger`
 / CDP API) on job board pages you're already logged into. **Automating
@@ -18,18 +49,45 @@ could get your account restricted or banned. This project is for personal,
 educational use — use it at your own discretion and risk. It isn't affiliated
 with LinkedIn, Welcome to the Jungle, or any other job board.
 
+## Do you need Claude Code?
+
+**Short answer: only if you want to edit or tailor your CV.** The core
+extension (running a search, scoring postings, exporting results) works
+completely on its own and never touches Claude Code — it only needs the
+`ANTHROPIC_API_KEY` from [What you need before you start](#what-you-need-before-you-start).
+
+Claude Code is a separate Anthropic product (a CLI / IDE agent), not the
+same thing as the API key above. It's only involved in two optional
+slash commands, `/setup-cv` and `/tailor-cv`, covered in
+[Customizing your CV](#customizing-your-cv-optional). To use those you need:
+
+- **Claude Code installed** — see [claude.com/claude-code](https://claude.com/product/claude-code)
+  for setup instructions.
+- **An active Claude subscription that includes Claude Code** (Pro, Max,
+  Team, or Enterprise) or API-based billing enabled for it. Without one,
+  `/setup-cv` and `/tailor-cv` simply won't run — they aren't scripts you
+  can execute any other way, they only work inside a live Claude Code
+  session.
+
+If you don't have Claude Code and don't plan to get it, that's completely
+fine: skip [Customizing your CV](#customizing-your-cv-optional) entirely.
+Drop a plain PDF of your CV into `resources/cv/`, follow
+[Quick start](#quick-start), and everything else works exactly the same.
+
 ## What you need before you start
 
 You'll install three things and get one API key. None of this requires prior
 experience with Node.js or Go.
 
 | Requirement | Why | How to check if you have it |
-|---|---|---|
+| --- | --- | --- |
 | **Node.js 18+** and **Yarn** | Builds the Chrome extension | `node -v` and `yarn -v` |
 | **Go 1.24+** | Runs the local scoring service | `go version` |
 | **Google Chrome** | Runs the extension | already installed, most likely |
 | **An Anthropic API key** | Lets the scoring service call Claude | you'll create one below |
 | **Your CV as a PDF** | What each job gets scored against | any PDF export works |
+| **Claude Code + a subscription** *(optional)* | Only needed for `/setup-cv` and `/tailor-cv` | see [Do you need Claude Code?](#do-you-need-claude-code) |
+| **LaTeX (`pdflatex`)** *(optional)* | Compiles the CV `/tailor-cv` edits into a usable PDF | `which pdflatex` — see [Customizing your CV](#customizing-your-cv-optional) |
 
 ### Installing Node.js and Yarn (macOS)
 
@@ -65,9 +123,14 @@ Using Claude costs a small amount per job scored (this project defaults to
 the inexpensive `claude-haiku-4-5` model). You'll need billing set up on
 your Anthropic account for the key to work.
 
+This key is separate from Claude Code — it's used only by the local
+`matching-service`, and it's all you need for the core extension flow.
+
 ## Quick start
 
-Five steps, from a fresh clone to a working extension.
+Five steps, from a fresh clone to a working extension. Every command below
+goes in a terminal (on macOS: the **Terminal** app, or press `Cmd+Space`,
+type "Terminal", hit Enter).
 
 **1. Clone this repo and open a terminal in it.**
 
@@ -89,6 +152,8 @@ copied above:
 ANTHROPIC_API_KEY=sk-ant-your-real-key-here
 ```
 
+Save the file.
+
 **3. Add your CV.**
 
 Drop a PDF of your CV/resume into `resources/cv/` (create the folder if it's
@@ -102,8 +167,8 @@ cp ~/Downloads/my-cv.pdf resources/cv/
 That's all you need for scoring — `matching-service` reads the PDF
 directly. If you also want to *edit* your CV's wording later, or generate
 a version tailored to a specific job posting, see
-[Customizing your CV](#customizing-your-cv-optional) below — that needs an
-extra one-time conversion step.
+[Customizing your CV](#customizing-your-cv-optional) below — that needs
+Claude Code and an extra one-time conversion step.
 
 **4. Run everything with one command.**
 
@@ -114,7 +179,28 @@ extra one-time conversion step.
 This builds the extension, builds and starts the local scoring service, and
 opens Chrome with the extension pre-loaded — in its own separate profile, so
 it never touches your regular Chrome logins or history. The first run takes
-a bit longer while it downloads dependencies.
+a bit longer while it downloads dependencies. You'll see log lines scroll
+by in the terminal; that's normal.
+
+**Before you click Start the very first time**, check two things in that
+new Chrome window — this is a one-time check, not something you repeat on
+later runs:
+
+- **The extension is actually loaded.** It doesn't get pinned to the
+  toolbar automatically, so you may not see its icon at a glance. Open
+  `chrome://extensions` in that window and confirm **"AI Job Analyzer"**
+  (or similar) is listed and enabled. If it isn't there, it wasn't loaded
+  automatically — click **Load unpacked** on that same page and select
+  `extension/dist`.
+- **"Developer mode" is turned on**, top-right toggle on that same
+  `chrome://extensions` page. This project relies on the `chrome.debugger`
+  API (real clicks/scrolls, see [How it works](#how-it-works-architecture)),
+  which Chrome only allows for unpacked/developer-loaded extensions like
+  this one — if Developer mode is off, `chrome.debugger` won't work and
+  Start will silently fail to do anything.
+
+Once both are confirmed, pin the extension's icon to the toolbar (puzzle-piece
+icon → pin) so it's easy to click each time.
 
 **5. Use it.**
 
@@ -136,15 +222,21 @@ Chrome window `start.sh` opened.
 
 ### If something goes wrong
 
-- **`yarn is not installed` / `go is not installed`** — revisit the
-  Prerequisites section above; the script checks for both before doing
-  anything else.
+- **`yarn is not installed` / `go is not installed`** — revisit
+  [What you need before you start](#what-you-need-before-you-start); the
+  script checks for both before doing anything else.
 - **`No CV found in resources/cv/`** — make sure there's exactly one `.pdf`
   file directly inside `resources/cv/` (not a subfolder). If you have more
   than one, either remove the extras or set `CV_PATH=/absolute/path/to/cv.pdf`
   explicitly before running the script.
 - **`ANTHROPIC_API_KEY is not set`** — check that `.env` exists (not just
   `.env.example`) and has your real key on the `ANTHROPIC_API_KEY=` line.
+- **Clicking Start does nothing, or there's no extension icon in the
+  toolbar** — the extension likely isn't loaded, or Developer mode is off.
+  Go to `chrome://extensions`, confirm the extension is listed and enabled,
+  turn on "Developer mode" (top right) if it's off, and use "Load unpacked"
+  → `extension/dist` if it's missing entirely. See the checklist in
+  [Quick start](#quick-start) step 4.
 - **Chrome doesn't open automatically** — the script still starts the
   scoring service; you'll just need to load the extension yourself: go to
   `chrome://extensions`, enable "Developer mode" (top right), click "Load
@@ -157,6 +249,9 @@ Chrome window `start.sh` opened.
   reach the scoring service. Check the terminal output for errors from
   `matching-service`; a missing or invalid `ANTHROPIC_API_KEY` is the most
   common cause.
+- **`/setup-cv` or `/tailor-cv` don't do anything / aren't recognized** —
+  these only work inside Claude Code, not in a regular terminal. See
+  [Do you need Claude Code?](#do-you-need-claude-code).
 
 All of the environment variables above (`CV_PATH`, `PORT`, `CHROME_BIN`,
 `ANTHROPIC_MODEL`) can also be set permanently in your `.env` file instead
@@ -208,7 +303,10 @@ of prefixing the command each time — see `.env.example` for the full list.
   `resources/profile/` (used only by `/tailor-cv`); more subfolders may be
   added later as the project needs other personal inputs.
 - `scripts/` — convenience scripts; `scripts/start.sh` runs everything with
-  one command (see Quick start above).
+  one command (see [Quick start](#quick-start) above).
+- `.claude/commands/` — Claude Code slash commands (`/setup-cv`,
+  `/tailor-cv`, `/add-portal`); only usable from inside Claude Code, see
+  [Do you need Claude Code?](#do-you-need-claude-code).
 
 ## Running each half manually
 
@@ -242,7 +340,9 @@ Usage:
 Write a new `SiteAdapter` in `extension/src/adapters/` (selectors and timings
 specific to that site) and register it in
 `extension/src/adapters/registry.ts`. The loop in `background.ts` doesn't
-need any changes.
+need any changes. `/add-portal` (Claude Code, see
+[Do you need Claude Code?](#do-you-need-claude-code)) can drive this for you
+end to end from pasted HTML.
 
 ### matching-service
 
@@ -258,13 +358,21 @@ See `matching-service/README.md` for the full API contract and optional env vars
 
 ## Customizing your CV (optional)
 
+> **Requires Claude Code and a LaTeX installation (`pdflatex`)** — see
+> [Do you need Claude Code?](#do-you-need-claude-code) if you're not sure
+> whether you have what's needed. If you don't want either, skip this
+> whole section; the rest of the project works fine without it.
+
 Both of these are Claude Code slash commands — typed in a Claude Code chat
 session (not a terminal command), and both are entirely optional: the core
 extension + scoring flow above works off your CV PDF alone and never needs
 either of them.
 
-Both can produce a compiled PDF, which needs a LaTeX distribution providing
-`pdflatex`. Check if you already have it:
+**You need `pdflatex` installed to actually get a usable, tailored PDF out
+of `/tailor-cv`.** Both commands will technically run without it and still
+write out an edited `.tex` file, but they won't compile it — so without
+`pdflatex` you're left with LaTeX source you'd have to compile yourself
+before you could submit it anywhere. Check if you already have it:
 
 ```bash
 which pdflatex
@@ -280,17 +388,16 @@ brew install --cask basictex
 Open a **new** terminal window afterwards (so your `PATH` picks it up),
 then confirm with `which pdflatex` again. No Homebrew? Download the
 "BasicTeX" installer from [tug.org/mactex/morepackages.html](https://tug.org/mactex/morepackages.html)
-instead. Neither command *requires* `pdflatex` — without it, you still get
-the editable `.tex` file, just no freshly compiled PDF.
+instead.
 
-### Step 1: make your CV editable — `/setup-cv`
+### Step 1: make your CV editable (`/setup-cv`)
 
 Your CV starts out as just a PDF, which isn't something Claude can reorder
 or reword directly. `/setup-cv` is a one-time conversion: it transcribes
 your PDF into a clean, editable LaTeX (`.tex`) CV — faithfully, never
 adding or embellishing anything — and compiles it back to a PDF so
-`matching-service` keeps working exactly as before. Run it once, in Claude
-Code, after step 3 of Quick start above:
+`matching-service` keeps working exactly as before. Run it once, inside a
+Claude Code session, after step 3 of [Quick start](#quick-start) above:
 
 ```
 /setup-cv
@@ -302,7 +409,7 @@ deleted) under `resources/cv/original/`. Skip this step entirely if you'd
 rather hand-write your CV in LaTeX yourself — just drop a single `.tex`
 file into `resources/cv/` and `/setup-cv` will recognize it's already done.
 
-### Step 2: tailor it to a specific job offer — `/tailor-cv`
+### Step 2: tailor it to a specific job offer (`/tailor-cv`)
 
 Given a job posting URL or pasted text, `/tailor-cv` rewrites your CV to
 better surface skills the posting asks for — reordering and rewording
@@ -323,7 +430,7 @@ certifications, domain knowledge) — this is the extra ground truth the
 command draws on to surface real skills. See
 `.claude/commands/tailor-cv.md` for the full flow.
 
-## Status / roadmap
+## Status and roadmap
 
 - [x] Extension skeleton (MV3 manifest + `debugger` permission).
 - [x] Real click/scroll prototype via CDP + LinkedIn adapter (selectors to
