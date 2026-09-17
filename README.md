@@ -261,20 +261,21 @@ of prefixing the command each time — see `.env.example` for the full list.
 ## How it works (architecture)
 
 ```
-┌─────────────────────────┐        fetch localhost         ┌──────────────────────┐
-│  Extension (TS, MV3)     │ ─────────────────────────────▶ │ matching-service (Go) │
-│                          │                                 │                       │
-│  popup:  Start / Stop /  │                                 │  - reads your CV(PDF) │
-│          export CSV/JSON │                                 │  - calls Claude API   │
+┌──────────────────────────┐        fetch localhost         ┌────────────────────────┐
+│  Extension (TS, MV3)     │ ─────────────────────────────▶ │  matching-service (Go) │
+│                          │                                │                        │
+│  popup:  Start / Stop /  │                                │  - reads your CV(PDF)  │
+│          export CSV/JSON │                                │  - calls Claude API    │
 │                          │ ◀───────────────────────────── │  - returns score 0-100 │
-│  background: scoring     │        { score, reasoning }     └──────────────────────┘
+│  background: scoring     │      { score, reasoning }      └────────────────────────┘
 │  loop, controlled via    │
 │  chrome.storage.local    │
 │         │                │
-│         ▼ chrome.debugger (CDP)
-│  REAL clicks/scrolls    │
-│  on the active tab       │
-└─────────────────────────┘
+│         ▼                │
+│  chrome.debugger (CDP)   │
+│    REAL clicks/scrolls   │
+│     on the active tab    │
+└──────────────────────────┘
 ```
 
 - **No synthetic events**: clicks and scrolls are fired with
