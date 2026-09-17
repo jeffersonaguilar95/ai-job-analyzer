@@ -22,6 +22,7 @@ popup yourself.
 - [Running each half manually](#running-each-half-manually)
 - [Customizing your CV (optional, needs Claude Code)](#customizing-your-cv-optional)
 - [Status and roadmap](#status-and-roadmap)
+- [License](#license)
 
 ## What is this?
 
@@ -447,3 +448,8 @@ command draws on to surface real skills. See
 - [x] `/setup-cv`: Claude Code slash command that converts a PDF resume
       into an editable LaTeX CV, one time, so `/tailor-cv` has something
       to work with.
+
+## License
+
+[MIT](LICENSE) — see the [Legal notice](#legal-notice) above for the
+separate, important caveat about automating job board sites.
